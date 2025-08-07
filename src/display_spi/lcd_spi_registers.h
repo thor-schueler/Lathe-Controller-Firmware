@@ -1,0 +1,65 @@
+// Copyright (c) Thor Schueler. All rights reserved.
+// SPDX-License-Identifier: MIT
+///
+/// ILI9488 Register Designations
+///
+
+#define ILI9488_SOFTRESET          0x01
+#define ILI9488_SLEEPIN            0x10
+#define ILI9488_SLEEPOUT           0x11
+#define ILI9488_NORMALDISP         0x13
+#define ILI9488_INVERTOFF          0x20
+#define ILI9488_INVERTON           0x21
+#define ILI9488_GAMMASET           0x26
+#define ILI9488_DISPLAYOFF         0x28
+#define ILI9488_DISPLAYON          0x29
+#define ILI9488_COLADDRSET         0x2A
+#define ILI9488_PAGEADDRSET        0x2B
+#define ILI9488_MEMORYWRITE        0x2C
+#define ILI9488_MEMORYACCESS       0x36
+#define ILI9488_PIXELFORMAT        0x3A
+#define ILI9488_RGBSIGNAL          0xB0
+#define ILI9488_FRAMECONTROL       0xB1
+#define ILI9488_INVERSIONCONRTOL   0xB4
+#define ILI9488_DISPLAYFUNC        0xB6
+#define ILI9488_ENTRYMODE          0xB7
+#define ILI9488_POWERCONTROL1      0xC0
+#define ILI9488_POWERCONTROL2      0xC1
+#define ILI9488_VCOMCONTROL1       0xC5
+#define ILI9488_VCOMCONTROL2       0xC7
+#define ILI9488_POWERCONTROLB      0xCF
+#define ILI9488_POWERCONTROLA      0xCB
+#define ILI9488_UNDEFINE0          0xE0
+#define ILI9488_UNDEFINE1          0xE1
+#define ILI9488_DRIVERTIMINGA      0xE8
+#define ILI9488_DRIVERTIMINGB      0xEA
+#define ILI9488_POWERONSEQ         0xED
+#define ILI9488_ENABLE3G           0xF2
+#define ILI9488_INTERFACECONTROL   0xF6
+#define ILI9488_RUMPRATIO          0xF7
+#define ILI9488_MEMCONTROL         0x36
+#define ILI9488_MADCTL             0x36
+
+#define ILI9488_MADCTL_MY  0x80
+#define ILI9488_MADCTL_MX  0x40
+#define ILI9488_MADCTL_MV  0x20
+#define ILI9488_MADCTL_ML  0x10
+#define ILI9488_MADCTL_RGB 0x00
+#define ILI9488_MADCTL_BGR 0x08
+#define ILI9488_MADCTL_MH  0x04
+
+
+#define HX8347G_COLADDRSTART_HI    0x02
+#define HX8347G_COLADDRSTART_LO    0x03
+#define HX8347G_COLADDREND_HI      0x04
+#define HX8347G_COLADDREND_LO      0x05
+#define HX8347G_ROWADDRSTART_HI    0x06
+#define HX8347G_ROWADDRSTART_LO    0x07
+#define HX8347G_ROWADDREND_HI      0x08
+#define HX8347G_ROWADDREND_LO      0x09
+#define HX8347G_MEMACCESS          0x16
+
+#define HX8357_CASET   0x2A
+#define HX8357_PASET   0x2B
+#define HX8357_RAMWR   0x2C
+#define HX8357_RAMRD   0x2E
