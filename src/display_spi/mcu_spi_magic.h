@@ -27,8 +27,8 @@
 #define SID   13
 #define SCK   14
 
-#define WIDTH 320
-#define HEIGHT 480
+#define WIDTH 240
+#define HEIGHT 320
 
 #define CD_COMMAND  (digitalWrite(RS,LOW))    
 #define CD_DATA     (digitalWrite(RS,HIGH)) 

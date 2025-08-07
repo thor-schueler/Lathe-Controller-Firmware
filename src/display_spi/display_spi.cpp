@@ -35,9 +35,9 @@ DISPLAY_SPI::DISPLAY_SPI()
 	digitalWrite(RESET, HIGH);
 
 	spi = new SPIClass(HSPI);
-  	spi->begin();
+	spi->begin();
 	spi->setFrequency(20000000);
-  	spi->setBitOrder(MSBFIRST);
+	spi->setBitOrder(MSBFIRST);
 	spi->setDataMode(SPI_MODE0);
 
 	xoffset = 0;
@@ -94,7 +94,7 @@ void DISPLAY_SPI::draw_bitmap(uint8_t x,uint8_t y,uint8_t width, uint8_t height,
   {
 		for(j=0;j<width;j++)
 		{
-		    if(mode)
+			if(mode)
 			{
 				tmp = pgm_read_byte(&BMP[i*width+j]);
 			}
@@ -152,7 +152,7 @@ void DISPLAY_SPI::draw_pixel(int16_t x, int16_t y, uint16_t color)
 	set_addr_window(x, y, x, y);
 	CS_ACTIVE;
 	writeCmd8(CC);
-	writeData18(color);
+	writeData16(color);
 	CS_IDLE;
 }
 
@@ -171,34 +171,34 @@ void DISPLAY_SPI::fill_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t
 	uint16_t i;
 	if (w < 0) 
 	{
-        w = -w;
-        x -= w;
-    }                           //+ve w
-    end = x + w;
-    if (x < 0)
-    {
-        x = 0;
-    }
-    if (end > get_width())
-    {
-        end = get_width();
-    }
-    w = end - x;
-    if (h < 0) 
+		w = -w;
+		x -= w;
+	}                           //+ve w
+	end = x + w;
+	if (x < 0)
 	{
-        h = -h;
-        y -= h;
-    }                           //+ve h
-    end = y + h;
-    if (y < 0)
-    {
-        y = 0;
-    }
-    if (end > get_height())
-    {
-        end = get_height();
+		x = 0;
 	}
-    h = end - y;
+	if (end > get_width())
+	{
+		end = get_width();
+	}
+	w = end - x;
+	if (h < 0) 
+	{
+		h = -h;
+		y -= h;
+	}                           //+ve h
+	end = y + h;
+	if (y < 0)
+	{
+		y = 0;
+	}
+	if (end > get_height())
+	{
+		end = get_height();
+	}
+	h = end - y;
 	if(true)
 	{
 		buffer = new uint8_t[(size_t)(h*3)];
@@ -299,27 +299,27 @@ void DISPLAY_SPI::invert_display(boolean invert)
 void DISPLAY_SPI::push_color_table(uint16_t * block, int16_t n, bool first, uint8_t flags)
 {
 	uint16_t color;
-    uint8_t h, l;
+	uint8_t h, l;
 	bool isconst = flags & 1;
-    CS_ACTIVE;
-    if (first) 
+	CS_ACTIVE;
+	if (first) 
 	{  
 		writeCmd8(CC);		
-    }
-    while (n-- > 0) 
+	}
+	while (n-- > 0) 
 	{
-        if (isconst) 
+		if (isconst) 
 		{
 			color = pgm_read_word(block++);		
-        } 
+		} 
 		else 
 		{
 			color = (*block++);			
 
 		}
-		writeData18(color);
+		writeData16(color);
 	}
-    CS_IDLE;
+	CS_IDLE;
 }
 
 /**
@@ -332,31 +332,31 @@ void DISPLAY_SPI::push_color_table(uint16_t * block, int16_t n, bool first, uint
 void DISPLAY_SPI::push_color_table(uint8_t * block, int16_t n, bool first, uint8_t flags)
 {
 	uint16_t color;
-    uint8_t h, l;
+	uint8_t h, l;
 	bool isconst = flags & 1;
 	bool isbigend = (flags & 2) != 0;
-    CS_ACTIVE;
-    if (first) 
+	CS_ACTIVE;
+	if (first) 
 	{
 		writeCmd8(CC);		
-    }
-    while (n-- > 0) 
+	}
+	while (n-- > 0) 
 	{
-        if (isconst) 
+		if (isconst) 
 		{
-            h = pgm_read_byte(block++);
-            l = pgm_read_byte(block++);
-        } 
+			h = pgm_read_byte(block++);
+			l = pgm_read_byte(block++);
+		} 
 		else 
 		{
-		    h = (*block++);
-            l = (*block++);
+			h = (*block++);
+			l = (*block++);
 		}
-        color = (isbigend) ? (h << 8 | l) :  (l << 8 | h);
+		color = (isbigend) ? (h << 8 | l) :  (l << 8 | h);
 		
-			writeData18(color);
+		writeData16(color);
 	}
-    CS_IDLE;
+	CS_IDLE;
 }
 
 /**
@@ -366,20 +366,20 @@ void DISPLAY_SPI::reset()
 {
 	CS_IDLE;
 	RD_IDLE;
-    WR_IDLE;
+	WR_IDLE;
 
-    digitalWrite(RESET, LOW);
-    delay(2);
-    digitalWrite(RESET, HIGH);
+	digitalWrite(RESET, LOW);
+	delay(2);
+	digitalWrite(RESET, HIGH);
   
-  	CS_ACTIVE;
-  	CD_COMMAND;
-  	write8(0x00);
-  	for(uint8_t i=0; i<3; i++)
-  	{
-  		WR_STROBE;
-  	}
-  	CS_IDLE;
+	CS_ACTIVE;
+	CD_COMMAND;
+	write8(0x00);
+	for(uint8_t i=0; i<3; i++)
+	{
+		WR_STROBE;
+	}
+	CS_IDLE;
 }
 
 /**
@@ -393,29 +393,29 @@ void DISPLAY_SPI::reset()
 void DISPLAY_SPI::set_rotation(uint8_t r)
 {
 	//return;
-    rotation = r & 3;           // just perform the operation ourselves on the protected variables
-    width = (rotation & 1) ? HEIGHT : WIDTH;
-    height = (rotation & 1) ? WIDTH : HEIGHT;
+	rotation = r & 3;           // just perform the operation ourselves on the protected variables
+	width = (rotation & 1) ? HEIGHT : WIDTH;
+	height = (rotation & 1) ? WIDTH : HEIGHT;
 	CS_ACTIVE;
 
 	uint8_t val;
-	switch (rotation) 
-	{			
+	switch (rotation)
+	{
 		case 0:
-		    val = ILI9488_MADCTL_MX | ILI9488_MADCTL_MY | ILI9488_MADCTL_BGR ; //0 degree 
-		    break;
+			val = ILI9341_MADCTL_MX | ILI9341_MADCTL_MY | ILI9341_MADCTL_RGB; // 0 degree
+			break;
 		case 1:
-		    val = ILI9488_MADCTL_MV | ILI9488_MADCTL_MY | ILI9488_MADCTL_BGR ; //90 degree 
-		    break;
+			val = ILI9341_MADCTL_MV | ILI9341_MADCTL_MY | ILI9341_MADCTL_RGB; // 90 degree
+			break;
 		case 2:
-		    val = ILI9488_MADCTL_ML | ILI9488_MADCTL_BGR; //180 degree 
-		    break;
+			val = ILI9341_MADCTL_MX | ILI9341_MADCTL_ML | ILI9341_MADCTL_RGB; // 180 degree
+			break;
 		case 3:
-		    val = ILI9488_MADCTL_MX | ILI9488_MADCTL_ML | ILI9488_MADCTL_MV | ILI9488_MADCTL_BGR; //270 degree
-		    break;
+			val = ILI9341_MADCTL_MV | ILI9341_MADCTL_MX | ILI9341_MADCTL_RGB; // 270 degree
+			break;
 	}
-	writeCmdData8(MD, val); 
- 	set_addr_window(0, 0, width, height);
+	writeCmdData8(ILI9341_MEMORYACCESS, val);
+	set_addr_window(0, 0, width - 1, height - 1);
 	vert_scroll(0, HEIGHT, 0);
 	CS_IDLE;
 }
@@ -447,29 +447,29 @@ void DISPLAY_SPI::toggle_backlight(boolean state)
  */
 void DISPLAY_SPI::vert_scroll(int16_t scroll_area_top, int16_t scroll_area_height, int16_t offset)
 {
-    int16_t bfa;
-    int16_t vsp;
+	int16_t bfa;
+	int16_t vsp;
 	bfa = HEIGHT - scroll_area_top - scroll_area_height; 
-    if (offset <= -scroll_area_height || offset >= scroll_area_height)
-    {
+	if (offset <= -scroll_area_height || offset >= scroll_area_height)
+	{
 		offset = 0; //valid scroll
-    }
+	}
 	vsp = scroll_area_top + offset; // vertical start position
-    if (offset < 0)
-    {
-        vsp += scroll_area_height;  //keep in unsigned range
-    }
-  	uint8_t d[6];           		// for multi-byte parameters
-  	d[0] = scroll_area_top >> 8;    // TFA (top fixed area)
-  	d[1] = scroll_area_top;
-  	d[2] = scroll_area_height >> 8; // VSA (scroll area)
-  	d[3] = scroll_area_height;
-  	d[4] = bfa >> 8;        		// BFA (bottom fixes area)
-  	d[5] = bfa;
+	if (offset < 0)
+	{
+		vsp += scroll_area_height;  //keep in unsigned range
+	}
+	uint8_t d[6];           		// for multi-byte parameters
+	d[0] = scroll_area_top >> 8;    // TFA (top fixed area)
+	d[1] = scroll_area_top;
+	d[2] = scroll_area_height >> 8; // VSA (scroll area)
+	d[3] = scroll_area_height;
+	d[4] = bfa >> 8;        		// BFA (bottom fixes area)
+	d[5] = bfa;
 	push_command(SC1, d, 6);		// Send the command setting the scroll window
 
 	d[0] = vsp >> 8;        		// Set the scroll start address at the top of the scroll area
-  	d[1] = vsp;						// Ending line parameter for the scroll
+	d[1] = vsp;						// Ending line parameter for the scroll
 	push_command(SC2, d, 2);		// Vertical Scroll Start Address command
 
 	if (offset == 0) 
@@ -493,37 +493,52 @@ void DISPLAY_SPI::vert_scroll(int16_t scroll_area_top, int16_t scroll_area_heigh
 uint32_t DISPLAY_SPI::read_GRAM(int16_t x, int16_t y, uint16_t *block, int16_t w, int16_t h)
 {
 	uint16_t ret, dummy;
-    uint32_t n = w * h;
+	uint32_t n = w * h;
 	uint32_t cnt = 0;
-    uint8_t r, g, b, tmp;
-    set_addr_window(x, y, x + w - 1, y + h - 1);
-    while (n > 0) 
+	uint8_t r, g, b, tmp;
+	set_addr_window(x, y, x + w - 1, y + h - 1);
+	while (n > 0) 
 	{
-        CS_ACTIVE;
+		CS_ACTIVE;
 		writeCmd16(RC);
-        setReadDir();
+		setReadDir();
 
 		read8(r);
-        while (n) 
-		{
-			if(R24BIT == 1)
-			{
-        		read8(r);
-         		read8(g);
-        		read8(b);
-            	ret = RGB_to_565(r, g, b);
+		while (n) 
+	static const uint8_t ILI9341_regValues[] PROGMEM = {
+		0xEF, 3, 0x03, 0x80, 0x02,
+		0xCF, 3, 0x00, 0xC1, 0x30,
+		0xED, 4, 0x64, 0x03, 0x12, 0x81,
+		0xE8, 3, 0x85, 0x00, 0x78,
+		0xCB, 5, 0x39, 0x2C, 0x00, 0x34, 0x02,
+		0xF7, 1, 0x20,
+		0xEA, 2, 0x00, 0x00,
+		ILI9341_POWERCONTROL1, 1, 0x23,
+		ILI9341_POWERCONTROL2, 1, 0x10,
+		ILI9341_VCOMCONTROL1, 2, 0x3E, 0x28,
+		ILI9341_VCOMCONTROL2, 1, 0x86,
+		ILI9341_MEMORYACCESS, 1, 0x48,
+		ILI9341_PIXELFORMAT, 1, 0x55, // 16-bit color
+		ILI9341_FRAMECONTROL, 2, 0x00, 0x18,
+		ILI9341_DISPLAYFUNC, 3, 0x08, 0x82, 0x27,
+		0xF2, 1, 0x00,
+		ILI9341_GAMMASET, 1, 0x01,
+		ILI9341_UNDEFINE0, 15, 0x0F, 0x31, 0x2B, 0x0C, 0x0E, 0x08, 0x4E, 0xF1, 0x37, 0x07, 0x10, 0x03, 0x0E, 0x09, 0x00,
+		ILI9341_UNDEFINE1, 15, 0x00, 0x0E, 0x14, 0x03, 0x11, 0x07, 0x31, 0xC1, 0x48, 0x08, 0x0F, 0x0C, 0x31, 0x36, 0x0F,
+		ILI9341_SLEEPIN, 0,
+		ILI9341_DISPLAYON, 0
+	};
+	init_table8(ILI9341_regValues, sizeof(ILI9341_regValues));
+	set_rotation(rotation);
+	invert_display(false);
 			}
-			else if(R24BIT == 0)
-			{
-				read16(ret);
-			}
-            *block++ = ret;
-            n--;
+			*block++ = ret;
+			n--;
 			cnt++;
-        }
-        CS_IDLE;
-        setWriteDir();
-    }
+		}
+		CS_IDLE;
+		setWriteDir();
+	}
 	return cnt;
 }
 
@@ -539,17 +554,17 @@ uint32_t DISPLAY_SPI::read_GRAM(int16_t x, int16_t y, uint16_t *block, int16_t w
 uint32_t DISPLAY_SPI::read_GRAM_RGB(int16_t x, int16_t y, uint8_t *block, int16_t w, int16_t h)
 {
 	uint32_t ret;
-    uint32_t n = (uint32_t)w * (uint32_t)h * 3;
+	uint32_t n = (uint32_t)w * (uint32_t)h * 3;
 	uint32_t cnt = 0;
-    uint8_t r;
+	uint8_t r;
 
-    set_addr_window(x, y, x+w-1, y+h-1);
+	set_addr_window(x, y, x+w-1, y+h-1);
 	CS_ACTIVE;
 	writeCmd16(0x2E);
-    setReadDir();
+	setReadDir();
 
 	r=spi->transfer(0x00);  // first byte just contains some status info... discard...
-    if(R24BIT == 1)
+	if(R24BIT == 1)
 	{
 		for (uint32_t i = 0; i < n; i++) 
 		{ 
@@ -569,8 +584,8 @@ uint32_t DISPLAY_SPI::read_GRAM_RGB(int16_t x, int16_t y, uint8_t *block, int16_
 			cnt+=3;
 		}
 	}
-    CS_IDLE;
-    setWriteDir();
+	CS_IDLE;
+	setWriteDir();
 	return cnt;
 }
 
@@ -583,18 +598,18 @@ uint32_t DISPLAY_SPI::read_GRAM_RGB(int16_t x, int16_t y, uint8_t *block, int16_
 uint16_t DISPLAY_SPI::read_reg(uint16_t reg, int8_t index)
 {
 	uint16_t ret,high;
-    uint8_t low;
+	uint8_t low;
 	CS_ACTIVE;
-    writeCmd16(reg);
-    setReadDir();
-    delay(1); 
+	writeCmd16(reg);
+	setReadDir();
+	delay(1); 
 	do 
 	{ 
 		read16(ret);
 	} while (--index >= 0);  
-    CS_IDLE;
-    setWriteDir();
-    return ret;
+	CS_IDLE;
+	setWriteDir();
+	return ret;
 }
 
 /**
@@ -648,49 +663,49 @@ void DISPLAY_SPI::start_display()
 											// Second parameter - Set the VREG2OUT voltage for negative gammas -1.25 x 3.30 = -4.1250 
 		0xC1, 1, 0x41,						// Send Power Control 2  command
 											// First parameter - Set the factor used in the step-up circuits.
-                          					//    DDVDH = VCI x 2
-                          					//    DDVDL = -(VCI x 2)
-                          					//    VCL = -VCI
-                          					//    VGH = VCI x 6
-                          					//    VGL = -VCI x 4
+											//    DDVDH = VCI x 2
+											//    DDVDL = -(VCI x 2)
+											//    VCL = -VCI
+											//    VGH = VCI x 6
+											//    VGL = -VCI x 4
 		0xC5, 3, 0x00, 0x0A, 0x80,			// Send VCOM Control command  
 											// First parameter - NV memory is not programmed
 											// Second parameter - Used to set the factor to generate VCOM voltage from the reference voltage VREG2OUT.  VCOM = -1.75 
 											// Third parameter - Select the Vcom value from VCM_REG [7:0] or NV memory. 1: VCOM value from VCM_REG [7:0].
 		0xB1, 2, 0xB0, 0x11,				// Send Frame Rate Control (In Normal Mode/Full Colors)
 											// First parameter - 
-					                        //    Set division ratio for internal clocks when Normal mode: 00 - Fosc
-                          					//    Set the frame frequency of full color normal mode: CNT = 17, Frame Rate 60.76 
+											//    Set division ratio for internal clocks when Normal mode: 00 - Fosc
+											//    Set the frame frequency of full color normal mode: CNT = 17, Frame Rate 60.76 
 											// Second parameter - Is used to set 1H (line) period of the Normal mode at the MCU interface: 17 clocks
 		0xB4, 1, 0x02,						// Send Display Inversion Control command
 											// First Parameter - set the Display Inversion mode: 2 dot inversion
 		0xB6, 2, 0x02, 0x22,				// Send Display Function Control command
 											// First parameter -
-                          					//    0000 0010
-                          					//    0           Select the display data path (memory or direct to shift register) when the RGB interface is used. Bypass - Memory
-                          					//     0          RCM RGB interface selection (refer to the RGB interface section). DE Mode
-                          					//      0         Select the interface to access the GRAM. When RM = 0, the driver will write display data to the GRAM via the system 
-                          					//                interface, and the driver will write display data to the GRAM via the RGB interface when RM = 1.
-                          					//       0        Select the display operation mode: Internal system clock  
-                          					//         00     Set the scan mode in a non-display area: Normal scan
-                          					//           10   Determine source/VCOM output in a non-display area in the partial display mode: AGND   
+											//    0000 0010
+											//    0           Select the display data path (memory or direct to shift register) when the RGB interface is used. Bypass - Memory
+											//     0          RCM RGB interface selection (refer to the RGB interface section). DE Mode
+											//      0         Select the interface to access the GRAM. When RM = 0, the driver will write display data to the GRAM via the system 
+											//                interface, and the driver will write display data to the GRAM via the RGB interface when RM = 1.
+											//       0        Select the display operation mode: Internal system clock  
+											//         00     Set the scan mode in a non-display area: Normal scan
+											//           10   Determine source/VCOM output in a non-display area in the partial display mode: AGND   
 											// Second parameter - 
-                          					//     0010 0010  
-                          					//     00         Set the direction of scan by the gate driver: G1 -> G480
-                          					//       1        Select the shift direction of outputs from the source driver: S960 -> S1        
-                          					//        0       Set the gate driver pin arrangement in combination with the GS bit (RB6h) to select the optimal scan mode for the module: G1->G2->G3->G4 ………………… G477->G478->G479->G480 
-                          					//          0010  Set the scan cycle when the PTG selects interval scan in a non-display area drive period. The scan cycle is defined 
-                          					//                by n frame periods, where n is an odd number from 3 to 31. The polarity of liquid crystal drive voltage from the gate driver is 
-                          					//                inverted in the same timing as the interval scan cycle: 5 frames (84ms)
+											//     0010 0010  
+											//     00         Set the direction of scan by the gate driver: G1 -> G480
+											//       1        Select the shift direction of outputs from the source driver: S960 -> S1        
+											//        0       Set the gate driver pin arrangement in combination with the GS bit (RB6h) to select the optimal scan mode for the module: G1->G2->G3->G4 ………………… G477->G478->G479->G480 
+											//          0010  Set the scan cycle when the PTG selects interval scan in a non-display area drive period. The scan cycle is defined 
+											//                by n frame periods, where n is an odd number from 3 to 31. The polarity of liquid crystal drive voltage from the gate driver is 
+											//                inverted in the same timing as the interval scan cycle: 5 frames (84ms)
 		0xB7, 1, 0xC6,						// Send Entry Mode Set command
 											// First parameter - 
-                          					//    1100 0110
-                          					//    1100        Set the data format when 16bbp (R, G, B) to 18 bbp (R, G, B) is stored in the internal GRAM. See ILI9488 datasheet 
-                          					//         0      The ILI9488 driver enters the Deep Standby Mode when the DSTB is set to high (= 1). In the Deep Standby mode, 
-                          					//                both internal logic power and SRAM power are turned off, the display data are stored in the Frame Memory, and the 
-                          					//                instructions are not saved. Rewrite Frame Memory content and instructions after exiting the Deep Standby Mode.
-                          					//          11    Set the output level of the gate driver G1 ~ G480 as follows: Normal display  
-                          					//            0   Low voltage detection control: Enable		
+											//    1100 0110
+											//    1100        Set the data format when 16bbp (R, G, B) to 18 bbp (R, G, B) is stored in the internal GRAM. See ILI9488 datasheet 
+											//         0      The ILI9488 driver enters the Deep Standby Mode when the DSTB is set to high (= 1). In the Deep Standby mode, 
+											//                both internal logic power and SRAM power are turned off, the display data are stored in the Frame Memory, and the 
+											//                instructions are not saved. Rewrite Frame Memory content and instructions after exiting the Deep Standby Mode.
+											//          11    Set the output level of the gate driver G1 ~ G480 as follows: Normal display  
+											//            0   Low voltage detection control: Enable		
 		0xBE, 2, 0x00, 0x04,				// Send HS Lanes Control command
 											// First parameter - Type 1 
 											// Second parameter - ESD protection: on
@@ -698,18 +713,18 @@ void DISPLAY_SPI::start_display()
 											// First parameter -  Enable 24-bits Data Bus; users can use DB23~DB0 as 24-bits data input: off
 		0x36, 1, 0x08,						// Send Memory Access Control command
 											// First parameter - see datasheet 
-                          					//    0000 1000   
-                          					//    0         MY - Row Address Order
-                          					//     0        MX - Column Access Order
-                          					//      0       MV - Row/Column Exchange
-                          					//       0      ML - Vertical Refresh Order
-                          					//         1    BGR- RBG-BGR Order
-                          					//          0   MH - Horizontal Refresh Order
+											//    0000 1000   
+											//    0         MY - Row Address Order
+											//     0        MX - Column Access Order
+											//      0       MV - Row/Column Exchange
+											//       0      ML - Vertical Refresh Order
+											//         1    BGR- RBG-BGR Order
+											//          0   MH - Horizontal Refresh Order
 		0x3A, 1, 0x66,						// Send Interface Pixel Format command
 											// First parameter - 
-                          					//    0110 0110
-                          					//    0110      RGB Interface Format 18bits/pixel
-                          					//         0110 MCU Interface Format 18bits/pixel
+											//    0110 0110
+											//    0110      RGB Interface Format 18bits/pixel
+											//         0110 MCU Interface Format 18bits/pixel
 											// using 0x66 sends data as 3 data bytes per pixel, each byte using the lower 6 bits for color information. 
 											// it is also possible for use 0x65 to configure for 565 RGB values. This results in better performance but loss of
 											// some color depth. In 565 mode, each pixel gets a 16bit color information (565). This means 30% less data over the buss
@@ -761,26 +776,26 @@ void DISPLAY_SPI::write_display_buffer()
 void DISPLAY_SPI:: init_table8(const void *table, int16_t size)
 {
 	uint8_t i;
-    uint8_t *p = (uint8_t *) table, dat[MAX_REG_NUM]; 
-    while (size > 0) 
+	uint8_t *p = (uint8_t *) table, dat[MAX_REG_NUM]; 
+	while (size > 0) 
 	{
-        uint8_t cmd = pgm_read_byte(p++);
-        uint8_t len = pgm_read_byte(p++);
-        if (cmd == TFTLCD_DELAY8) 
+		uint8_t cmd = pgm_read_byte(p++);
+		uint8_t len = pgm_read_byte(p++);
+		if (cmd == TFTLCD_DELAY8) 
 		{
-            delay(len);
-            len = 0;
-        } 
+			delay(len);
+			len = 0;
+		} 
 		else 
 		{
-            for (i = 0; i < len; i++)
-            {
-                dat[i] = pgm_read_byte(p++);
-            }
+			for (i = 0; i < len; i++)
+			{
+				dat[i] = pgm_read_byte(p++);
+			}
 			push_command(cmd,dat,len);
-        }
-        size -= len + 2;
-    }
+		}
+		size -= len + 2;
+	}
 }
 
 /**
@@ -791,21 +806,21 @@ void DISPLAY_SPI:: init_table8(const void *table, int16_t size)
  */
 void DISPLAY_SPI:: init_table16(const void *table, int16_t size)
 {
-    uint16_t *p = (uint16_t *) table;
-    while (size > 0) 
+	uint16_t *p = (uint16_t *) table;
+	while (size > 0) 
 	{
-        uint16_t cmd = pgm_read_word(p++);
-        uint16_t d = pgm_read_word(p++);
-        if (cmd == TFTLCD_DELAY16)
-        {
-            delay(d);
-        }
-        else 
+		uint16_t cmd = pgm_read_word(p++);
+		uint16_t d = pgm_read_word(p++);
+		if (cmd == TFTLCD_DELAY16)
+		{
+			delay(d);
+		}
+		else 
 		{
 			write_cmd_data(cmd, d);
 		}
-        size -= 2 * sizeof(int16_t);
-    }
+		size -= 2 * sizeof(int16_t);
+	}
 }
 
 /**
@@ -816,14 +831,14 @@ void DISPLAY_SPI:: init_table16(const void *table, int16_t size)
  */
 void DISPLAY_SPI::push_command(uint8_t cmd, uint8_t *data, int8_t data_size)
 {
-  	CS_ACTIVE;
+	CS_ACTIVE;
 	writeCmd8(cmd);
 	while (data_size-- > 0) 
 	{
-        uint8_t u8 = *data++;
-        writeData8(u8); 
-    }
-    CS_IDLE;
+		uint8_t u8 = *data++;
+		writeData8(u8); 
+	}
+	CS_IDLE;
 }
 
 /**
