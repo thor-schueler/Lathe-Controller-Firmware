@@ -4,9 +4,22 @@
 #ifndef _CONTROLLER_H_
 #define _CONTROLLER_H_
 
-#include "Arduino.h"
+#include <Arduino.h>
 #include "../controller_display/controller_display.h"
 
+#define I_MAIN_POWER 4
+#define I_EMS 34
+#define I_ENERGIZE 39
+#define I_FOR_F 35
+#define I_FOR_B 36
+#define I_LIGHT 22
+#define I_CONTROLBOARD_DETECT 27
+#define I_SPINDLE_PULSE 33
+
+#define O_SPINDLE_DIRECTION_SWITCH_A 21
+#define O_SPINDLE_DIRECTION_SWITCH_B 19
+#define O_SPINDLE_OFF 18
+#define O_ENGINE_DISCHARGE 39
 
 
 /**

@@ -19,8 +19,8 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "display_gui.h"
 #include "../logging/SerialLogger.h"
+#include "display_gui.h"
 
 #define swap(a, b) { int16_t t = a; a = b; b = t; }
 

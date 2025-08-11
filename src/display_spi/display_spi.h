@@ -14,8 +14,8 @@
  * if you don't need to control the LED pin,you can set it to 3.3V and set the pin definition to -1.
  * other pins can be defined by youself,for example
  * pin usage as follow:
- *                   CS  DC/RS  RESET  SDI/MOSI  MISO 	SCK   LED    VCC     GND    
- * ESP32             15   25     26       13     12		14    3.3V   3.3V    GND
+ *                   CS  DC/RS  RESET  SDI/MOSI  SCK   LED    VCC     GND    
+ * ESP32             15   12     26       13     14    32     3.3V    GND
  */
 
 /**

@@ -27,6 +27,7 @@
 #define ILI9341_VCOMCONTROL2       0xC7
 #define ILI9341_UNDEFINE0          0xE0
 #define ILI9341_UNDEFINE1          0xE1
+#define ILI9341_MADCTL             0x36
 
 #define ILI9341_MADCTL_MY  0x80
 #define ILI9341_MADCTL_MX  0x40
@@ -36,7 +37,7 @@
 #define ILI9341_MADCTL_BGR 0x08
 #define ILI9341_MADCTL_MH  0x04
 
-#define HX8357_CASET   0x2A
-#define HX8357_PASET   0x2B
-#define HX8357_RAMWR   0x2C
-#define HX8357_RAMRD   0x2E
+#define ILI9341_CASET   0x2A
+#define ILI9341_PASET   0x2B
+#define ILI9341_RAMWR   0x2C
+#define ILI9341_RAMRD   0x2E

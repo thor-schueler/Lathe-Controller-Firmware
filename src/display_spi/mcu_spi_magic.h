@@ -17,11 +17,11 @@
 /** 
  * Pin usage as follow:
  *                   CS  DC/RS  RESET  SDI/MOSI  SCK   LED    VCC     GND    
- * ESP32             15   25     26       13     14    3.3V   3.3V    GND
+ * ESP32             15  12     26       13     14     32     3.3V    GND
  */
 
-#define LED   -1            
-#define RS    25       
+#define LED   32            
+#define RS    12       
 #define RESET 26
 #define CS    15
 #define SID   13

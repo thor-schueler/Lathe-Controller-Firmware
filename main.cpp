@@ -7,6 +7,7 @@
  */
 
 #define HIGH_WATER_MARK_LOOP_SKIP 120
+#define BAUD_RATE 115200
 
 #include "Arduino.h"
 #include "ESP.h"
@@ -45,8 +46,7 @@ void setup()
   //
   // Initialize configuration data from EEPROM
   //
-  config.Initialize(false);
-  Logger.SetSpeed(config.baud_rate);
+  Logger.SetSpeed(BAUD_RATE);
 
   Logger.Info_f(F("Copyright 2025, Thor Schueler, Firmware Version: %s"), VERSION);
   Logger.Info_f(F("Loop task stack size: %i"), getArduinoLoopTaskStackSize());
@@ -56,7 +56,6 @@ void setup()
   Logger.Info_f(F("Total PSRAM: %d"), ESP.getPsramSize()); 
   Logger.Info_f(F("Free PSRAM: %d"), ESP.getFreePsram());
   Logger.Info(F("... Startup"));
-  config.Print();
 
   controller = new Controller();
 
