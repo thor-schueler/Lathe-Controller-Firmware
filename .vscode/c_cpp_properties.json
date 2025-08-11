@@ -15,7 +15,8 @@
             ],
             "intelliSenseMode": "gcc-x64",
             "includePath": [
-                "${workspaceFolder}\\**",
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/src/**/",
                 "${env:USERPROFILE}\\AppData\\Local\\Arduino15\\packages\\esp32\\tools\\esp32-arduino-libs\\idf-release_v5.*\\esp32\\qio_qspi\\include",
                 "${env:USERPROFILE}\\AppData\\Local\\Arduino15\\packages\\esp32\\tools\\esp32-arduino-libs\\idf-release_v5.*\\esp32\\include",
                 "${env:USERPROFILE}\\AppData\\Local\\Arduino15\\packages\\esp32\\tools\\esp32-arduino-libs\\idf-release_v5.*\\esp32\\include\\xtensa\\esp32\\include",
