@@ -30,17 +30,16 @@ void Controller_Display::init()
     uint32_t buffer_size = (w_area_x2-w_area_x1)*(w_area_y2-w_area_y1)*3/2;
     DISPLAY_SPI::init();
     draw_background(lcars, lcars_size);
-    draw_image(splash, splash_size, w_area_x1, w_area_y1, w_area_x2-w_area_x1, w_area_y2-w_area_y1);
-    
-    Logger.Info(F("Attempting allocation of screen scrolling memory buffer..."));
-    Logger.Info_f(F("....Largest free block: %d"), heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
-    buf1 = (uint8_t *)heap_caps_malloc(buffer_size, MALLOC_CAP_8BIT);
-    if(buf1 == nullptr) Logger.Error(F("....Allocation of upper scroll buffer (buf1) did not succeed"));
-    else Logger.Info(F("....Allocation of upper scroll buffer (buf1) successful"));
 
-    buf2 = (uint8_t *)heap_caps_malloc(buffer_size, MALLOC_CAP_8BIT);
-    if(buf2 == nullptr) Logger.Error(F("....Allocation of lower scroll buffer (buf2) did not succeed"));
-    else Logger.Info(F("....Allocation of lower scroll buffer (buf2) successful"));
+    //Logger.Info(F("Attempting allocation of screen scrolling memory buffer..."));
+    //Logger.Info_f(F("....Largest free block: %d"), heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    //buf1 = (uint8_t *)heap_caps_malloc(buffer_size, MALLOC_CAP_8BIT);
+    //if(buf1 == nullptr) Logger.Error(F("....Allocation of upper scroll buffer (buf1) did not succeed"));
+    //else Logger.Info(F("....Allocation of upper scroll buffer (buf1) successful"));
+
+    //buf2 = (uint8_t *)heap_caps_malloc(buffer_size, MALLOC_CAP_8BIT);
+    //if(buf2 == nullptr) Logger.Error(F("....Allocation of lower scroll buffer (buf2) did not succeed"));
+    //else Logger.Info(F("....Allocation of lower scroll buffer (buf2) successful"));
     Logger.Info_f(F("....Free heap: %d"), ESP.getFreeHeap());
     Logger.Info_f(F("....Largest free block: %d"), heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
     Logger.Info(F("Done."));
@@ -74,13 +73,13 @@ void Controller_Display::w_area_print(String s, uint16_t c, bool newline)
     set_text_color(c);
     set_text_back_color(0x0);
     set_text_size(1);
-    while(w_area_y1 + w_area_cursor_y > w_area_y2 - text_size*8)
-    {
-        // scroll display area to make space
-        window_scroll(w_area_x1, w_area_y1, w_area_x2-w_area_x1, w_area_y2-w_area_y1, 
-            0, text_size*8, buf1, buf2, text_size*8);
-        w_area_cursor_y = w_area_cursor_y - text_size*8;
-    }
+    //while(w_area_y1 + w_area_cursor_y > w_area_y2 - text_size*8)
+    //{
+    //    // scroll display area to make space
+    //    window_scroll(w_area_x1, w_area_y1, w_area_x2-w_area_x1, w_area_y2-w_area_y1, 
+    //        0, text_size*8, buf1, buf2, text_size*8);
+    //    w_area_cursor_y = w_area_cursor_y - text_size*8;
+    //}
 
     print_string(s, w_area_cursor_x, w_area_cursor_y, w_area_x1, w_area_y1);
     w_area_cursor_x = get_text_X_cursor();

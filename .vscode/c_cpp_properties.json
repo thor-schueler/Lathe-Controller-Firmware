@@ -75,6 +75,7 @@
                 "ARDUINO_HOST_OS=\"windows\"",
                 "ARDUINO_FQBN=\"esp32:esp32:esp32:JTAGAdapter=default,PSRAM=enabled,PartitionScheme=custom,CPUFreq=240,FlashMode=qio,FlashFreq=80,FlashSize=8M,UploadSpeed=921600,LoopCore=1,EventsCore=1,DebugLevel=none,EraseFlash=none,ZigbeeMode=default\"",
                 "ESP32=ESP32",
+                "ESP_PLATFORM",
                 "CORE_DEBUG_LEVEL=0",
                 "ARDUINO_RUNNING_CORE=1",
                 "ARDUINO_EVENT_RUNNING_CORE=1",

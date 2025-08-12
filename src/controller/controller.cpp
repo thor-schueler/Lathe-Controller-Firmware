@@ -28,8 +28,9 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <freertos/task.h>
 #include "controller.h"
 #include "../logging/SerialLogger.h"
+#include <portmacro.h>
 
-
+portMUX_TYPE _hall_mux = portMUX_INITIALIZER_UNLOCKED;
 static Controller *_instance = nullptr;
 
 /**
@@ -40,42 +41,124 @@ Controller::Controller()
     Logger.Info(F("Startup"));
     Logger.Info(F("....Initialize Display"));
     _display = new Controller_Display();
-    _display->set_rotation(3);
+    _display->set_rotation(1);
     _display->init();
     _instance = this;
 
     Logger.Info(F("....Inititialize GPIO pins"));
-    //pinMode(AXIS_Z, INPUT_PULLUP);
-    //pinMode(AXIS_X, INPUT_PULLUP);
-    //pinMode(AXIS_Y, INPUT_PULLUP);
-    //pinMode(EMS, INPUT_PULLUP);
-    //pinMode(WHEEL_A, INPUT_PULLUP);
-    //pinMode(WHEEL_B, INPUT_PULLUP);
-    //pinMode(TOUCH_CS, OUTPUT);
-    //digitalWrite(TOUCH_CS, HIGH);
+    pinMode(I_MAIN_POWER, INPUT_PULLUP);
+    pinMode(I_EMS, INPUT);
+    pinMode(I_ENERGIZE, INPUT);
+    pinMode(I_FOR_F, INPUT);
+    pinMode(I_FOR_B, INPUT);
+    pinMode(I_LIGHT, INPUT_PULLUP);
+    pinMode(I_CONTROLBOARD_DETECT, INPUT_PULLDOWN);
+    pinMode(I_SPINDLE_PULSE, INPUT_PULLUP);
+
+    pinMode(O_SPINDLE_DIRECTION_SWITCH_A, OUTPUT);
+    pinMode(O_SPINDLE_DIRECTION_SWITCH_B, OUTPUT);
+    pinMode(O_SPINDLE_OFF, OUTPUT);
+    pinMode(O_ENGINE_DISCHARGE, OUTPUT);
+
 
     Logger.Info(F("....Attach event receivers for GPIO"));
-    //attachInterrupt(digitalPinToInterrupt(AXIS_X), std::bind(&Wheel::handle_axis_change, this), FALLING);
-    //attachInterrupt(digitalPinToInterrupt(AXIS_Y), std::bind(&Wheel::handle_axis_change, this), FALLING);
-    //attachInterrupt(digitalPinToInterrupt(AXIS_Z), std::bind(&Wheel::handle_axis_change, this), FALLING);
-    //attachInterrupt(digitalPinToInterrupt(EMS), std::bind(&Wheel::handle_ems_change, this), CHANGE);
-    //attachInterrupt(digitalPinToInterrupt(WHEEL_A), std::bind(&Wheel::handle_encoder_change, this), CHANGE); 
-    //(digitalPinToInterrupt(WHEEL_B), std::bind(&Wheel::handle_encoder_change, this), CHANGE);
+    attachInterrupt(digitalPinToInterrupt(I_MAIN_POWER), std::bind(&Controller::handle_input, this), CHANGE);
+    attachInterrupt(digitalPinToInterrupt(I_EMS), std::bind(&Controller::handle_input, this), CHANGE);
+    attachInterrupt(digitalPinToInterrupt(I_FOR_F), std::bind(&Controller::handle_input, this), CHANGE);
+    attachInterrupt(digitalPinToInterrupt(I_FOR_B), std::bind(&Controller::handle_input, this), CHANGE);
+    attachInterrupt(digitalPinToInterrupt(I_LIGHT), std::bind(&Controller::handle_input, this), CHANGE);
+    attachInterrupt(digitalPinToInterrupt(I_ENERGIZE), std::bind(&Controller::handle_energize, this), FALLING);
+    //attachInterrupt(digitalPinToInterrupt(I_CONTROLBOARD_DETECT), std::bind(&Controller::handle_input, this), CHANGE);
 
-    Logger.Info("....Initializing Axis and Feed Values");  
-    //if(!digitalRead(AXIS_X)) _selected_axis = Axis::X;
-    //else if(!digitalRead(AXIS_Y)) _selected_axis = Axis::Y;
-    //else if(!digitalRead(AXIS_Z)) _selected_axis = Axis::Z;  
-    //_has_emergency = digitalRead(EMS);
+    if(USE_POLLING_FOR_RPM)
+    {
+        Logger.Info(F("     Not using interrupt for RPM sensing. Instead create RPM sample timer"));
+        const esp_timer_create_args_t ta = {
+            .callback = read_hall_sensor,
+            .arg = this,
+            .name = "rmp sensing",
+            .skip_unhandled_events = true
+        }; 
+        esp_timer_create(&ta, &this->_hall_timer_handle);
+        esp_timer_start_periodic(this->_hall_timer_handle, HALL_POLLING_INTERVAL_US);
+    }
+    else
+    {
+        Logger.Info_f(F("     Register Interrupt Handler for Hall Sensor on pin %i"), I_SPINDLE_PULSE);
+        attachInterrupt(digitalPinToInterrupt(I_SPINDLE_PULSE), std::bind(&Controller::handle_spindle_pulse, this), FALLING);
+    }
+    
+
+    Logger.Info("....Initializing Relays");
+    digitalWrite(O_ENGINE_DISCHARGE, LOW); 
+    digitalWrite(O_SPINDLE_OFF, LOW);
+    digitalWrite(O_SPINDLE_DIRECTION_SWITCH_A, LOW);
+    digitalWrite(O_SPINDLE_DIRECTION_SWITCH_B, LOW);
+
+    Logger.Info("....Initializing Input Values");  
+    _main_power = digitalRead(I_MAIN_POWER);
+    _has_emergency = digitalRead(I_EMS);
+    _toggle_energize = digitalRead(I_ENERGIZE);
+    _for_f = digitalRead(I_FOR_F);
+    _for_b = digitalRead(I_FOR_B);
+    _light = digitalRead(I_LIGHT);
+    _is_energized = digitalRead(I_CONTROLBOARD_DETECT);
+    Logger.Info_f(F("         Main Power: %s"), _main_power ? "On" : "Off");
+    Logger.Info_f(F("         Emergency Shutdown: %s"), _has_emergency ? "On" : "Off");
+    Logger.Info_f(F("         Forward Selector: %s"), _for_f ? "On" : "Off");      
+    Logger.Info_f(F("         Backward Selector: %s"), _for_b ? "On" : "Off");    
+    Logger.Info_f(F("         Light: %s"), _light ? "On" : "Off");
+    Logger.Info_f(F("         Energized: %s"), _is_energized ? "Hot" : "Cold");  
 
     Logger.Info(F("....Generating Mutexes"));
     _display_mutex = xSemaphoreCreateBinary();  xSemaphoreGive(_display_mutex);
 
     Logger.Info("....Create various tasks");
     xTaskCreatePinnedToCore(display_runner, "displayRunner", 8192, this, 1, &_displayRunner, 0);
-    xTaskCreatePinnedToCore(input_runner, "inputRunner", 2048, this, 1, &_inputRunner, 0);
+    xTaskCreatePinnedToCore(input_runner, "inputRunner", 2048, this, configMAX_PRIORITIES-1, &_inputRunner, 0);
 
     Logger.Info("Startup done");
+}
+
+/**
+ * @brief Cleans up resources
+ */
+Controller::~Controller()
+{
+    Logger.Info(F("Destruct controller client and clean up resources"));
+    Logger.Info(F("     Remove tasks"));
+    if(this->_displayRunner != NULL) vTaskDelete(this->_displayRunner);
+    if(this->_inputRunner != NULL) vTaskDelete(this->_inputRunner);
+    if(this->_displayRunner != NULL || this->_inputRunner != NULL) 
+    {
+        while(this->_displayRunner != NULL || this->_inputRunner != NULL)
+        {
+            Logger.Info(F("     Shutdown Task in progress. Wait for tasks to complete"));
+            vTaskDelay(pdMS_TO_TICKS(250));
+        }
+    }
+    if(USE_POLLING_FOR_RPM)
+    {
+        Logger.Info(F("     Remove RPM timer"));
+        if(this->_hall_timer_handle != NULL)
+        {
+            if(esp_timer_is_active(this->_hall_timer_handle)) esp_timer_stop(this->_hall_timer_handle);
+            esp_timer_delete(this->_hall_timer_handle);
+        }
+    }
+    else
+    {
+        Logger.Info(F("     Remove RPM hall sensor interrupt"));
+        detachInterrupt(digitalPinToInterrupt(I_SPINDLE_PULSE));
+    }
+
+    Logger.Info(F("     Remove interrupts"));
+    detachInterrupt(digitalPinToInterrupt(I_MAIN_POWER));
+    detachInterrupt(digitalPinToInterrupt(I_EMS));
+    detachInterrupt(digitalPinToInterrupt(I_FOR_F));
+    detachInterrupt(digitalPinToInterrupt(I_FOR_B));
+    detachInterrupt(digitalPinToInterrupt(I_LIGHT));
+    detachInterrupt(digitalPinToInterrupt(I_ENERGIZE));
 }
 
 
@@ -137,76 +220,179 @@ void Controller::input_runner(void* args)
     Controller *_this = reinterpret_cast<Controller *>(args);
     for (;;) 
     { 
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        //
+        // read input states
+        //
+        if(digitalRead(I_MAIN_POWER) != _this->_main_power) 
+        {
+            _this->_main_power = !_this->_main_power;
+            Logger.Info_f(F("Main Power changed to: %s"), _this->_main_power ? "On" : "Off");
+        }
+        if(digitalRead(I_EMS) != _this->_has_emergency) 
+        {
+            _this->_has_emergency = !_this->_has_emergency;
+            Logger.Info_f(F("EMS changed to: %s"), _this->_has_emergency ? "Shutdown" : "Energize");
+        }
+        if(digitalRead(I_LIGHT) != _this->_light) 
+        {
+            _this->_light = !_this->_light;
+            Logger.Info_f(F("Light toggled: %s"), _this->_light ? "On" : "Off");
+        }
+        if(digitalRead(I_FOR_F) != _this->_for_f) 
+        {
+            _this->_for_f = !_this->_for_f;
+             _this->_direction_a.desired = _this->_for_f;
+            Logger.Info_f(F("Forward Direction changed to: %s"), _this->_for_f ? "On" : "Off");
+        }
+        if(digitalRead(I_FOR_B) != _this->_for_b) 
+        {
+            _this->_for_b = !_this->_for_b;
+            _this->_direction_b.desired = _this->_for_b;
+            Logger.Info_f(F("Backward Direction changed to: %s"), _this->_for_b ? "On" : "Off");
+        }
+        if(digitalRead(I_CONTROLBOARD_DETECT) != _this->_is_energized) 
+        {
+            _this->_is_energized = !_this->_is_energized;
+            Logger.Info_f(F("Engine power: %s"), _this->_is_energized ? "Hot" : "Cold");
+        }
 
-        // this section is executed for every wheel position change.
-        // To tranlsate into the CNC command, we need to use feed and axis
-        //switch(_this->_selected_axis)
-        //{
-        //    case Axis::X:
-        //        _this->_x += _this->_selected_feed * _this->_direction;
-        //        break;
-        //    case Axis::Y:
-        //        _this->_y += _this->_selected_feed * _this->_direction;
-        //        break;
-        //    case Axis::Z:
-        //        _this->_z += _this->_selected_feed * _this->_direction;
-        //        break;             
-        //}
+        //
+        // take appropriate action
+        //
+        _this->_common.desired = (!_this->_for_b && !_this->_for_f) ? false : true;
+        if(!_this->_is_energized)
+        {
+            if(_this->_for_f)
+            {
+                digitalWrite(O_SPINDLE_DIRECTION_SWITCH_A, LOW);
+                digitalWrite(O_SPINDLE_DIRECTION_SWITCH_B, LOW);
+                _this->_direction_b.desired = false;
+                _this->_for_b = false;
+            }
+            if(_this->_for_b)
+            {
+                digitalWrite(O_SPINDLE_DIRECTION_SWITCH_A, HIGH);
+                digitalWrite(O_SPINDLE_DIRECTION_SWITCH_B, HIGH);
+                _this->_direction_a.desired = false;
+                _this->_for_f = false;
+            }            
+            if(_this->_common.desired != _this->_common.reported) digitalWrite(O_SPINDLE_OFF, HIGH);            
+        }
+
+        if(_this->_toggle_energize)
+        {
+            if(_this->_is_energized)
+            {
+                Logger.Info_f("     De-Energizing engine...");
+                digitalWrite(O_SPINDLE_OFF, HIGH);
+                do { 
+                    _this->_is_energized = digitalRead(I_CONTROLBOARD_DETECT); 
+                    vTaskDelay(10);
+                }
+                while (_this->_is_energized);
+                digitalWrite(O_SPINDLE_OFF, LOW);
+            }
+            else
+            {
+                Logger.Info_f("     Energizing engine...");
+                do { 
+                    // power on happens on the motor control board, we just wait until we read the voltage
+                    _this->_is_energized = digitalRead(I_CONTROLBOARD_DETECT);
+                    vTaskDelay(10); 
+                }
+                while (_this->_is_energized);
+            }
+            _this->_toggle_energize = false;
+        }
         
-        //if(!_this->_has_emergency)
-        //{
-        //    String s = _this->format_string("G21G91%c%c%fF2000", 
-        //        (char)_this->_selected_axis,
-        //        _this->_direction == -1 ? '-': '+' ,
-        //        _this->_selected_feed);
-        //    Serial.println(s);
-        //}
+        _this->_direction_a.reported = digitalRead(O_SPINDLE_DIRECTION_SWITCH_A);
+        _this->_direction_b.reported = digitalRead(O_SPINDLE_DIRECTION_SWITCH_B);
+        _this->_common.reported = digitalRead(O_SPINDLE_OFF);
+        _this->_deenergize.reported = digitalRead(O_ENGINE_DISCHARGE);
+        Logger.Info  (F("Status:"));
+        Logger.Info_f(F("    Engine power: %s"), _this->_is_energized ? "Hot" : "Cold");
+        Logger.Info_f(F("    Direction Relay A: %s"), _this->_direction_a.reported ? "Forward" : "Backward");
+        Logger.Info_f(F("    Direction Relay B: %s"), _this->_direction_b.reported ? "Forward" : "Backward");
+        Logger.Info_f(F("    Direction Relay Common: %s"), _this->_common.reported ? "Closed" : "Open");
+        Logger.Info_f(F("    Denergize Relay: %s"), _this->_deenergize.reported ? "Open" : "Closed");
+
+        //
+        // block execution until next event trigger
+        //
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     }
 }
 
 /**
- * @brief Event handler monitoring the Axus GPIOs 
+ * @brief Interrupt handler to read the State of the Hall sensor to measure Motor RPM
+ *
+ * @param arg pointer to class instance context (this)
  */
-void IRAM_ATTR Controller::handle_axis_change()
-{    
-    //if(!digitalRead(AXIS_X)) _selected_axis = Axis::X;
-    //if(!digitalRead(AXIS_Y)) _selected_axis = Axis::Y;
-    //else if(!digitalRead(AXIS_Z)) _selected_axis = Axis::Z;
-    //_direction = 0;
+void IRAM_ATTR Controller::read_hall_sensor(void *arg) 
+{
+    static byte reg = 0x0;
+    static bool state = 0x1;
+
+    // hall sensor will read logical 1 until the magnet gets close to the sensor, when it
+    // switches to logical 0. So it is equivalent to a normally closed switch. So will
+    // monitor for a stable low signal while our state is high.  
+
+    Controller* _this = reinterpret_cast<Controller *>(arg);
+    portENTER_CRITICAL_ISR(&_hall_mux);
+    bool val = digitalRead(I_SPINDLE_PULSE);
+    reg = reg << 1;                                 // left shift register
+    reg |= val ?  1 << 0 : 0 << 0;                  // set least signifcant bit based on read value
+    if(reg == 0xff && state == 0x0) state = 0x1;    // if all bits are set, we have a stable 1 state
+    if(reg == 0x0 && state == 0x1)                  // if all bits are unset, we have a stable 0 state
+    {                                               // if at the same time our state is 1, we have a state
+        _this->_revolutions++;                      // transition. 
+        state = 0x0;
+    }
+    portEXIT_CRITICAL_ISR(&_hall_mux);
 }
 
 /**
- * @brief Event handler watching the Quadradure encoder GPIOs.
+ * @brief Event handler watching for changes on the energize button toggle.
  */
-void IRAM_ATTR Controller::handle_encoder_change()
+void IRAM_ATTR Controller::handle_energize()
 {
-    static int8_t c = 0;
-    //if(_has_emergency) return;
+    unsigned long currentTime = millis();
+    if (currentTime - _instance->_last_toggle_energize > DEBOUNCE_MS) 
+    {
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        _instance->_last_toggle_energize = currentTime;
+        _instance->_toggle_energize = true;
+        vTaskNotifyGiveFromISR(_instance->_inputRunner, &xHigherPriorityTaskWoken); 
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+}
 
-    static const int8_t enconder_state_table[16] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0};
-    //int MSB = digitalRead(WHEEL_A); // Most significant bit 
-    //int LSB = digitalRead(WHEEL_B); // Least significant bit 
-    //int encoded = (MSB << 1) | LSB; // Combine the two signals 
-    //if(encoded != _wheel_encoded)
-    //{
-    //    int sum = (_wheel_encoded << 2) | encoded;  // Add the two previous bits 
-    //    c += enconder_state_table[sum];
-    //    if(c == 4 || c == -4)
-    //    {
-    //        _wheel_position += c == 4 ? 1 : -1;
-    //        _direction = c > 0 ? 1 : -1;
-    //        c = 0x0;
-    //        _wheel_encoded = encoded;   // Update the last encoded value
+/**
+ * @brief Event handler watching for changes on any inputs.
+ */
+void IRAM_ATTR Controller::handle_input()
+{
+    unsigned long currentTime = millis();
+    if (currentTime - _instance->_last_input_change > DEBOUNCE_MS) 
+    {
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        _instance->_last_input_change = currentTime;
+        vTaskNotifyGiveFromISR(_instance->_inputRunner, &xHigherPriorityTaskWoken); 
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+}
 
-    //        // Signal our job to run the axis....
-    //        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    //        vTaskNotifyGiveFromISR(_instance->_wheelRunner, &xHigherPriorityTaskWoken); 
-    //        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-    //    }
-    //    else
-    //    {
-    //        _wheel_encoded = encoded;   // Update the last encoded value  
-    //    }
-    //}
+/**
+ * @brief Event handler monitoring the Spindle Pulse
+ */
+void IRAM_ATTR Controller::handle_spindle_pulse()
+{    
+    portENTER_CRITICAL_ISR(&_hall_mux);
+    uint64_t now = esp_timer_get_time();
+    if(now - this->_hall_debounce_tick > HALL_DEBOUNCE_DELAY_US)
+    {
+        this->_hall_debounce_tick = now;
+        this->_revolutions++;
+    }
+    portEXIT_CRITICAL_ISR(&_hall_mux);
 }
