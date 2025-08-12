@@ -24,8 +24,11 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <stdlib.h>
 #include <stdarg.h>
 #include <FunctionalInterrupt.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include "controller.h"
 #include "../logging/SerialLogger.h"
+
 
 static Controller *_instance = nullptr;
 

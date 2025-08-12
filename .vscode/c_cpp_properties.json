@@ -58,10 +58,11 @@
                 "${env:USERPROFILE}\\onedrive\\documents\\Arduino\\libraries\\*\\src\\**"
             ],
             "forcedInclude": [
-                "${env:USERPROFILE}\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.*\\cores\\esp32\\Arduino.h"
+                "${env:USERPROFILE}\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.*\\cores\\esp32\\Arduino.h",
+                "${env:USERPROFILE}\\AppData\\Local\\Arduino15\\packages\\esp32\\tools\\esp32-arduino-libs\\idf-release_v5.5-b66b5448-v1\\esp32\\include\\freertos\\esp_additions\\include\\freertos\\idf_additions.h"
             ],
             "cStandard": "c11",
-            "cppStandard": "c++17",
+            "cppStandard": "c++11",
             "defines": [
                 "ARDUINO_LOOP_STACK_SIZE=16384",
                 "F_CPU=240000000L",
