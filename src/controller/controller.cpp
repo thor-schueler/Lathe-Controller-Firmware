@@ -114,8 +114,9 @@ Controller::Controller()
     _display_mutex = xSemaphoreCreateBinary();  xSemaphoreGive(_display_mutex);
 
     Logger.Info("....Create various tasks");
-    xTaskCreatePinnedToCore(display_runner, "displayRunner", 8192, this, 1, &_displayRunner, 0);
-    xTaskCreatePinnedToCore(input_runner, "inputRunner", 2048, this, configMAX_PRIORITIES-1, &_inputRunner, 0);
+    xTaskCreatePinnedToCore(display_runner, "displayRunner", 8192, this, 1, &_display_runner, 0);
+    xTaskCreatePinnedToCore(input_runner, "inputRunner", 2048, this, configMAX_PRIORITIES-1, &_input_runner, 0);
+    xTaskCreatePinnedToCore(rpm_runner, "rpmRunner", 2048, this, configMAX_PRIORITIES-1, &_rpm_runner, 0);
 
     Logger.Info("Startup done");
 }
@@ -127,16 +128,13 @@ Controller::~Controller()
 {
     Logger.Info(F("Destruct controller client and clean up resources"));
     Logger.Info(F("     Remove tasks"));
-    if(this->_displayRunner != NULL) vTaskDelete(this->_displayRunner);
-    if(this->_inputRunner != NULL) vTaskDelete(this->_inputRunner);
-    if(this->_displayRunner != NULL || this->_inputRunner != NULL) 
-    {
-        while(this->_displayRunner != NULL || this->_inputRunner != NULL)
-        {
-            Logger.Info(F("     Shutdown Task in progress. Wait for tasks to complete"));
-            vTaskDelay(pdMS_TO_TICKS(250));
-        }
-    }
+    if(this->_display_runner != NULL) vTaskDelete(this->_display_runner);
+    if(this->_input_runner != NULL) vTaskDelete(this->_input_runner);
+    if(this->_rpm_runner != NULL) vTaskDelete(this->_rpm_runner);
+    this->_display_runner = NULL;
+    this->_input_runner = NULL;
+    this->_rpm_runner = NULL;
+
     if(USE_POLLING_FOR_RPM)
     {
         Logger.Info(F("     Remove RPM timer"));
@@ -324,6 +322,58 @@ void Controller::input_runner(void* args)
 }
 
 /**
+ * @brief Task function caluclating the spindle RPM based on the pulses on a regular schedule.
+ * @param args - pointer to task arguments 
+ */
+void Controller::rpm_runner(void* args)
+{
+    Controller *_this = reinterpret_cast<Controller *>(args);
+    for (;;) 
+    { 
+        _this->calculate_rpm();
+        vTaskDelay(pdMS_TO_TICKS(RPM_CALCULATION_INTERVAL));
+    }
+}
+
+
+/**
+ * @brief Calculates the rpm based on the collected pulses
+ */
+void Controller::calculate_rpm() 
+{
+    uint32_t validTimes[MAX_RPM_PULSES];
+    uint32_t sum = 0;
+    float avgDelta = 0.0;
+    float rawRPM = 0.0;
+    int validCount = 0;
+    int count = (this->_pulse_index < MAX_RPM_PULSES) ? this->_pulse_index : MAX_RPM_PULSES;
+    if (count < 2) return;
+        // we need at least two pulses to calculate RPMs. 
+
+    // Filter out timestamps older than MAX_RPM_AGE_US
+    for (int i = 0; i < count; i++) 
+    {
+        int idx = (this->_pulse_index - i - 1 + MAX_RPM_PULSES) % MAX_RPM_PULSES;
+        if (micros() - this->_pulse_times[idx] <= MAX_RPM_AGE_US) validTimes[validCount++] = this->_pulse_times[idx];
+    }
+    if (validCount < 2) return;
+        // we need at least two pulses to calculate RPMs.
+
+    // Calculate average delta
+    for (int i = 1; i < validCount; i++) sum += validTimes[i - 1] - validTimes[i];
+
+    avgDelta = sum / float(validCount - 1);
+    rawRPM = 60000000.0 / avgDelta;
+
+    // Jitter suppression
+    if (abs((int)rawRPM - (int)this->_rpm) > MIN_RPM_DELTA)
+    {
+        this->_rpm = RPM_SMOOTHING_ALPHA * rawRPM + (1.0 - RPM_SMOOTHING_ALPHA) * this->_rpm;
+            // Exponential smoothing
+    }
+}
+
+/**
  * @brief Interrupt handler to read the State of the Hall sensor to measure Motor RPM
  *
  * @param arg pointer to class instance context (this)
@@ -345,7 +395,10 @@ void IRAM_ATTR Controller::read_hall_sensor(void *arg)
     if(reg == 0xff && state == 0x0) state = 0x1;    // if all bits are set, we have a stable 1 state
     if(reg == 0x0 && state == 0x1)                  // if all bits are unset, we have a stable 0 state
     {                                               // if at the same time our state is 1, we have a state
-        _this->_revolutions++;                      // transition. 
+                              // transition. 
+          
+        _this->_pulse_times[_this->_pulse_index % MAX_RPM_PULSES] = micros();
+        _this->_pulse_index++;
         state = 0x0;
     }
     portEXIT_CRITICAL_ISR(&_hall_mux);
@@ -357,12 +410,12 @@ void IRAM_ATTR Controller::read_hall_sensor(void *arg)
 void IRAM_ATTR Controller::handle_energize()
 {
     unsigned long currentTime = millis();
-    if (currentTime - _instance->_last_toggle_energize > DEBOUNCE_MS) 
+    if (currentTime - this->_last_toggle_energize > DEBOUNCE_MS) 
     {
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-        _instance->_last_toggle_energize = currentTime;
-        _instance->_toggle_energize = true;
-        vTaskNotifyGiveFromISR(_instance->_inputRunner, &xHigherPriorityTaskWoken); 
+        this->_last_toggle_energize = currentTime;
+        this->_toggle_energize = true;
+        vTaskNotifyGiveFromISR(this->_input_runner, &xHigherPriorityTaskWoken); 
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
 }
@@ -373,11 +426,11 @@ void IRAM_ATTR Controller::handle_energize()
 void IRAM_ATTR Controller::handle_input()
 {
     unsigned long currentTime = millis();
-    if (currentTime - _instance->_last_input_change > DEBOUNCE_MS) 
+    if (currentTime - this->_last_input_change > DEBOUNCE_MS) 
     {
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-        _instance->_last_input_change = currentTime;
-        vTaskNotifyGiveFromISR(_instance->_inputRunner, &xHigherPriorityTaskWoken); 
+        this->_last_input_change = currentTime;
+        vTaskNotifyGiveFromISR(this->_input_runner, &xHigherPriorityTaskWoken); 
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
 }
@@ -392,7 +445,8 @@ void IRAM_ATTR Controller::handle_spindle_pulse()
     if(now - this->_hall_debounce_tick > HALL_DEBOUNCE_DELAY_US)
     {
         this->_hall_debounce_tick = now;
-        this->_revolutions++;
+        this->_pulse_times[this->_pulse_index % MAX_RPM_PULSES] = micros();
+        this->_pulse_index++;
     }
     portEXIT_CRITICAL_ISR(&_hall_mux);
 }
