@@ -55,12 +55,16 @@ void setup()
   Logger.Info_f(F("Free heap: %d"), ESP.getFreeHeap()); 
   Logger.Info_f(F("Total PSRAM: %d"), ESP.getPsramSize()); 
   Logger.Info_f(F("Free PSRAM: %d"), ESP.getFreePsram());
-  Logger.Info(F("... Startup"));
+  Logger.Info(F(""));
+  Logger.Info(F(""));
+  
 
   controller = new Controller();
 
-  Logger.Info(F("... Init done"));
+  Logger.Info(F("Init done"));
   Logger.Info_f(F("Free heap: %d"), ESP.getFreeHeap()); 
+  Logger.Info(F(""));
+  
 }
 
 /**

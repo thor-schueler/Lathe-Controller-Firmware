@@ -14,10 +14,10 @@
  */
 Controller_Display::Controller_Display()
 {
-    w_area_x1 = 210;
-    w_area_y1 = 140;
-    w_area_x2 = 480;
-    w_area_y2 = 316;
+    w_area_x1 = 20;
+    w_area_y1 = 20;
+    w_area_x2 = 100;
+    w_area_y2 = 100;
     w_area_cursor_x = 0;
     w_area_cursor_y = 0;
 }
@@ -27,9 +27,10 @@ Controller_Display::Controller_Display()
  */
 void Controller_Display::init()
 {
-    uint32_t buffer_size = (w_area_x2-w_area_x1)*(w_area_y2-w_area_y1)*3/2;
+    //uint32_t buffer_size = (w_area_x2-w_area_x1)*(w_area_y2-w_area_y1)*3/2;
     DISPLAY_SPI::init();
     draw_background(lcars, lcars_size);
+    //test();
 
     //Logger.Info(F("Attempting allocation of screen scrolling memory buffer..."));
     //Logger.Info_f(F("....Largest free block: %d"), heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
@@ -336,29 +337,6 @@ void Controller_Display::test()
   set_text_size(5);
   print_string("The End", w_area_x1+20, w_area_y1+20);
 
-  write_axis(X); vTaskDelay(1000);
-  write_axis(Y); vTaskDelay(1000);
-  write_axis(Z); vTaskDelay(1000);
-
-  write_feed(Feed::NANO); vTaskDelay(1000);
-  write_feed(Feed::MICRO); vTaskDelay(1000);
-  write_feed(Feed::MILLI); vTaskDelay(1000);
-  write_feed(Feed::FULL); vTaskDelay(1000);
-
-  float val = 310.703;
-  for(int i=0; i<500; i++)
-  {
-    write_x(val);
-    val += 0.001;
-  }
-  val = 720.089;
-  for(int i=0; i<100; i++)
-  {
-    write_y(val);
-    val += 0.1;
-    vTaskDelay(10);
-  }
-  write_z(30.009);
   vTaskDelay(5000);
   fill_rect(w_area_x1, w_area_y1, w, h, 0x0);
 }

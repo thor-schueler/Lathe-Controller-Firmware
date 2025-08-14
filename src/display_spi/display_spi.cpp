@@ -30,8 +30,10 @@ DISPLAY_SPI::DISPLAY_SPI()
 	if(LED >= 0)
 	{
 		pinMode(LED, OUTPUT);
-		digitalWrite(LED, HIGH);
+		digitalWrite(LED, LOW);
 	}
+	digitalWrite(RESET, LOW);
+	vTaskDelay(pdMS_TO_TICKS(100)); // wait for reset to complete
 	digitalWrite(RESET, HIGH);
 
 	spi = new SPIClass(HSPI);

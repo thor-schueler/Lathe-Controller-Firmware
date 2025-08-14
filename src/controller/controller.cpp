@@ -38,6 +38,7 @@ static Controller *_instance = nullptr;
  */
 Controller::Controller()
 {
+    vTaskDelay(5000);
     Logger.Info(F("Startup"));
     Logger.Info(F("....Initialize Display"));
     _display = new Controller_Display();
@@ -53,7 +54,7 @@ Controller::Controller()
     pinMode(I_FOR_B, INPUT);
     pinMode(I_LIGHT, INPUT_PULLUP);
     pinMode(I_CONTROLBOARD_DETECT, INPUT_PULLDOWN);
-    pinMode(I_SPINDLE_PULSE, INPUT_PULLUP);
+    pinMode(I_SPINDLE_PULSE, INPUT_PULLDOWN);
 
     pinMode(O_SPINDLE_DIRECTION_SWITCH_A, OUTPUT);
     pinMode(O_SPINDLE_DIRECTION_SWITCH_B, OUTPUT);
@@ -103,11 +104,11 @@ Controller::Controller()
     _for_b = digitalRead(I_FOR_B);
     _light = digitalRead(I_LIGHT);
     _is_energized = digitalRead(I_CONTROLBOARD_DETECT);
-    Logger.Info_f(F("         Main Power: %s"), _main_power ? "On" : "Off");
+    Logger.Info_f(F("         Main Power: %s"), _main_power ? "Off" : "On");
     Logger.Info_f(F("         Emergency Shutdown: %s"), _has_emergency ? "On" : "Off");
     Logger.Info_f(F("         Forward Selector: %s"), _for_f ? "On" : "Off");      
     Logger.Info_f(F("         Backward Selector: %s"), _for_b ? "On" : "Off");    
-    Logger.Info_f(F("         Light: %s"), _light ? "On" : "Off");
+    Logger.Info_f(F("         Light: %s"), _light ? "Off" : "On");
     Logger.Info_f(F("         Energized: %s"), _is_energized ? "Hot" : "Cold");  
 
     Logger.Info(F("....Generating Mutexes"));
@@ -119,6 +120,8 @@ Controller::Controller()
     xTaskCreatePinnedToCore(rpm_runner, "rpmRunner", 2048, this, configMAX_PRIORITIES-1, &_rpm_runner, 0);
 
     Logger.Info("Startup done");
+    Logger.Info("");
+    Logger.Info("");
 }
 
 /**
@@ -221,10 +224,12 @@ void Controller::input_runner(void* args)
         //
         // read input states
         //
+        vTaskDelay(pdMS_TO_TICKS(DEBOUNCE_MS));
+        Logger.Info_f(F("         Energized: %d - %d"), digitalRead(I_MAIN_POWER), _this->_main_power); 
         if(digitalRead(I_MAIN_POWER) != _this->_main_power) 
         {
             _this->_main_power = !_this->_main_power;
-            Logger.Info_f(F("Main Power changed to: %s"), _this->_main_power ? "On" : "Off");
+            Logger.Info_f(F("Main Power changed to: %s"), _this->_main_power ? "Off" : "On");
         }
         if(digitalRead(I_EMS) != _this->_has_emergency) 
         {
