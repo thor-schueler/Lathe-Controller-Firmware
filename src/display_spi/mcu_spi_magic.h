@@ -39,8 +39,6 @@
 #define MOSI_HIGH   (digitalWrite(SID,HIGH)) 
 #define CLK_LOW     (digitalWrite(SCK,LOW)) 
 #define CLK_HIGH    (digitalWrite(SCK,HIGH)) 
-#define WR_STROBE { }
-#define RD_STROBE { }  
 
 #define write16(d) write8(d>>8); write8(d)
 #define read16(dst) { uint8_t hi; read8(hi); read8(dst); dst |= (hi << 8); }

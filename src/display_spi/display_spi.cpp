@@ -5,8 +5,6 @@
 // OR BREAKOUT BOARD USAGE.
 
 #include <SPI.h>
-//#include "pins_arduino.h"
-//#include "wiring_private.h"
 #include "display_spi.h"
 #include "lcd_spi_registers.h"
 #include "mcu_spi_magic.h"
@@ -26,24 +24,21 @@ DISPLAY_SPI::DISPLAY_SPI()
 {
 	pinMode(CS, OUTPUT);	  // Enable outputs
 	pinMode(RS, OUTPUT);
-	pinMode(RESET, OUTPUT);
-	if(LED >= 0)
+	if(RESET > 0) pinMode(RESET, OUTPUT);
+	if(LED > 0)
 	{
 		pinMode(LED, OUTPUT);
 		digitalWrite(LED, LOW);
 	}
-	digitalWrite(RESET, LOW);
-	vTaskDelay(pdMS_TO_TICKS(100)); // wait for reset to complete
-	digitalWrite(RESET, HIGH);
 
 	spi = new SPIClass(HSPI);
-	spi->begin();
+	spi->begin(SCK, -1, MOSI, CS);
+		// explicitely pass the PINs since we need to avoid the assignment of the MISO pin as 
+		// this pin is required elsewhere. 
 	spi->setFrequency(20000000);
 	spi->setBitOrder(MSBFIRST);
 	spi->setDataMode(SPI_MODE0);
 
-	xoffset = 0;
-	yoffset = 0;
 	rotation = 0;
 	width = WIDTH;
 	height = HEIGHT;
@@ -275,7 +270,7 @@ int16_t DISPLAY_SPI::get_width() const
 void DISPLAY_SPI::init()
 {
 	reset();
-	toggle_backlight(true);
+	//toggle_backlight(true);
 	start_display();
 }
 
@@ -286,8 +281,7 @@ void DISPLAY_SPI::init()
 void DISPLAY_SPI::invert_display(boolean invert)
 {
 	CS_ACTIVE;
-	uint8_t val = VL^invert;
-	writeCmd8(val ? 0x21 : 0x20);
+	writeCmd8(invert ? ILI9341_INVERTON : ILI9341_INVERTOFF);
 	CS_IDLE;
 }
 
@@ -370,18 +364,26 @@ void DISPLAY_SPI::reset()
 	RD_IDLE;
 	WR_IDLE;
 
-	digitalWrite(RESET, LOW);
-	delay(2);
-	digitalWrite(RESET, HIGH);
-  
-	CS_ACTIVE;
-	CD_COMMAND;
-	write8(0x00);
-	for(uint8_t i=0; i<3; i++)
+	if(RESET > 0)
 	{
-		WR_STROBE;
+		digitalWrite(RESET, LOW);
+		delay(20);
+		digitalWrite(RESET, HIGH);
+		delay(120);
+
+		CS_ACTIVE;
+		CD_COMMAND;
+		write8(ILI9341_NOP);
+		CS_IDLE;
 	}
-	CS_IDLE;
+	else
+	{
+		CS_ACTIVE;
+		CD_COMMAND;
+		write8(ILI9341_SOFTRESET);
+		CS_IDLE;
+		delay(120);
+	}
 }
 
 /**
@@ -404,16 +406,16 @@ void DISPLAY_SPI::set_rotation(uint8_t r)
 	switch (rotation)
 	{
 		case 0:
-			val = ILI9341_MADCTL_MX | ILI9341_MADCTL_MY | ILI9341_MADCTL_RGB; // 0 degree
+			val = ILI9341_MADCTL_MX | ILI9341_MADCTL_RGB; // 0 degree
 			break;
 		case 1:
-			val = ILI9341_MADCTL_MV | ILI9341_MADCTL_MY | ILI9341_MADCTL_RGB; // 90 degree
+			val = ILI9341_MADCTL_MV | ILI9341_MADCTL_RGB; // 90 degree
 			break;
 		case 2:
-			val = ILI9341_MADCTL_MX | ILI9341_MADCTL_ML | ILI9341_MADCTL_RGB; // 180 degree
+			val = ILI9341_MADCTL_MY | ILI9341_MADCTL_RGB; // 180 degree
 			break;
 		case 3:
-			val = ILI9341_MADCTL_MV | ILI9341_MADCTL_MX | ILI9341_MADCTL_RGB; // 270 degree
+			val = ILI9341_MADCTL_MV | ILI9341_MADCTL_MX | ILI9341_MADCTL_MY | ILI9341_MADCTL_RGB; // 270 degree
 			break;
 	}
 	writeCmdData8(ILI9341_MEMORYACCESS, val);
@@ -632,32 +634,77 @@ void DISPLAY_SPI::set_addr_window(unsigned int x1, unsigned int y1, unsigned int
 void DISPLAY_SPI::start_display()
 {
 	reset();
-	delay(120);
 
 	// ILI9341 initialization sequence
     static const uint8_t ILI9341_regValues[] PROGMEM = {
-        0xEF, 3, 0x03, 0x80, 0x02,
-        0xCF, 3, 0x00, 0xC1, 0x30,
-        0xED, 4, 0x64, 0x03, 0x12, 0x81,
-        0xE8, 3, 0x85, 0x00, 0x78,
-        0xCB, 5, 0x39, 0x2C, 0x00, 0x34, 0x02,
-        0xF7, 1, 0x20,
-        0xEA, 2, 0x00, 0x00,
-        0xC0, 1, 0x23,
-        0xC1, 1, 0x10,
-        0xC5, 2, 0x3e, 0x28,
-        0xC7, 1, 0x86,
-        0x36, 1, 0x48,
-        0x3A, 1, 0x55,
-        0xB1, 2, 0x00, 0x18,
-        0xB6, 3, 0x08, 0x82, 0x27,
-        0xF2, 1, 0x00,
-        0x26, 1, 0x01,
-        0xE0, 15, 0x0F, 0x31, 0x2B, 0x0C, 0x0E, 0x08, 0x4E, 0xF1, 0x37, 0x07, 0x10, 0x03, 0x0E, 0x09, 0x00,
-        0xE1, 15, 0x00, 0x0E, 0x14, 0x03, 0x11, 0x07, 0x31, 0xC1, 0x48, 0x08, 0x0F, 0x0C, 0x31, 0x36, 0x0F,
-        0x11, 0,
-        TFTLCD_DELAY8, 120,
-        0x29, 0
+        0xEF, 3, 0x03, 0x80, 0x02,								// Prepares the controller for extended command access
+																// Configures internal voltage or timing parameters
+																// May unlock access to other registers used in subsequent commands
+        0xCF, 3, 												// Power control B - configures internal power settings related to the step-up circuit and voltage regulator behavior
+				0x00, 											// 		Reserved
+				0xC1, 											// 		Controls internal step-up or power amplifier gain
+				0x30,											// 		Sets Vcore voltage level or regulator output
+        0xED, 4, 												// Power on sequence control - vendor-defined command that configures how the internal power circuits ramp up during startup
+				0x64,											// 		Power ramp timing or step-up factor 
+				0x03, 											// 		Control bits for enabling internal power blocks
+				0x12,											// 		Vcore voltage setting or reference
+				0x81,											// 		Enable internal regulator or reference voltage
+        0xE8, 3,												// Driver Timing Control A - configures internal timing parameters for the display’s power-up and signal synchronization
+				0x85, 											//		EQ control or precharge timing for internal power circuits
+				0x00, 											//		Reserved
+				0x78,											// 		Output timing control—affects gate driver and source driver sync
+        0xCB, 5, 												// Power Control A. It configures internal voltage settings and power ramp behavior—critical for ensuring the display’s internal regulators and charge pumps behave predictably during startup.
+				0x39, 											//		Vcore control or step-up gain
+				0x2C, 											//		Power control tuning
+				0x00, 											//		Reserved
+				0x34, 											//		VGH/VGL voltage level (gate driver high/low)
+				0x02,											//		Internal regulator enable or reference voltage
+        0xF7, 1, 												// Pump Ratio Control - configures the ratio of the internal charge pump used to generate higher voltages for gate drivers
+				0x20,											//		Sets the charge pump ratio—affects VGH/VGL generation for gate drivers 
+		0xEA, 2, 0x00, 0x00,									// Driver Timing Control B - low-level configuration that fine-tunes internal timing parameters for the display’s gate and source drivers
+		ILI9341_POWERCONTROL1, 1, 								// Power Control 1 - core voltage configuration commands—it sets the internal voltage regulator that drives the source driver circuitry
+				0x23,											//		Sets the internal voltage regulator output (VRH)
+        ILI9341_POWERCONTROL2, 1, 								// Power Control 2 - sets the source driver power supply control.
+				0x10,											//		SAP[2:0] — Source driver power control
+        ILI9341_VCOMCONTROL1, 2, 								// VCOM Control 1 - sets the common electrode voltage levels.
+				0x3e, 											//		VCOMH — VCOM high voltage ≈ 4.5V
+				0x28,											//		VCOML — VCOM low voltage ≈ -1.5V
+        ILI9341_VCOMCONTROL2, 1, 								// VCOM Control 2 - Fine-tunes the VCOM voltage offset.
+				0x86,											// 		VCOM offset - empirically tuned for most modules.
+        ILI9341_MEMORYACCESS, 1, 								// Memory Access Control (MADCTL)
+				0x40,											// 		Bit7 - MY - Row Address Order (flip vertically)
+																//		Bit6 - MX -	Column Address Order (flip horizontally)
+																//		Bit5 - MV -	Row/Column Exchange (rotate 90°)
+																//		Bit3 - BGR - RGB/BGR Order
+																//		Bit2 - ML - Vertical Refresh Order
+																// 		Bit1 - MH - Horizontal Refresh Order
+        ILI9341_VSCRSADD, 1, 0x00,								// Vertical Scroll Offset to 0x00
+		ILI9341_PIXELFORMAT, 1, 								// Pixel Format Set
+				0x55,											//		0x55 - 16-bit (RGB565), 0x66 - 18-bit (RGB666)
+        ILI9341_FRAMECONTROL, 2, 								// Frame Rate Control (Normal Mode)
+				0x00, 											//		Division ratio
+				0x18,											//		Frame rate control (≈ 70Hz), 0x18 is a balanced value for smooth visuals and low EMI.
+        ILI9341_DISPLAYFUNC, 3, 								// Display Function Control - Fine-tunes how pixels are refreshed, Helps reduce flicker and improve visual stability
+				0x08, 											//		Scan direction (e.g., left-to-right, top-to-bottom)
+				0x82, 											//		LCD drive line configuration
+				0x27,											//		Timing control for gate driver and source driver
+        0xF2, 1, 0x00,											// Enable 3Gamma Control - 0x00 disables it, allowing manual gamma tuning via 0xE0 and 0xE1.
+        ILI9341_GAMMASET, 1, 									// Gamma Set - Selects one of four fixed gamma curves.
+				0x01,											//		0x01 - Curve 1 (default), 0x02 - Curve 2, 0x03 - Curve 3, 0x04 - Curve 4
+        ILI9341_GMCTRP1, 15, 									// Positive Gamma Correction - Fine-tunes the gamma curve for positive voltages. Higher values → steeper transitions (more contrast), Lower values → flatter transitions (softer gradients)
+				0x0F, 											//		V63
+				0x31, 0x2B, 0x0C, 0x0E,	0x08,					// 		V1–V5 affect dark tones
+				0x4E, 0xF1, 0x37, 0x07, 0x10, 					//		V6–V10 shape midtones
+				0x03, 0x0E, 0x09, 0x00,							//		V11–V14 influence highlights and white balance
+        ILI9341_GMCTRN1, 15, 									// Negative Gamma Correction - omplements 0xE0 (Positive Gamma Correction) and shapes the tonal curve for darker regions and shadows
+				0x00,											//		V63 
+				0x0E, 0x14, 0x03, 0x11, 0x07, 					// 		V1–V5: Influence black levels and low-brightness transitions.
+				0x31, 0xC1, 0x48, 0x08, 0x0F, 					//		V6–V10: Shape midtone response and contrast.
+				0x0C, 0x31, 0x36, 0x0F,							//		V11–V14: Affect highlights and white balance.
+        ILI9341_SLEEPOUT, 0,									// Sleep Out - wakes the display from sleep mode.
+        TFTLCD_DELAY8, 120,										// Necessary delay for 0x11
+        ILI9341_DISPLAYON, 0,									// Display on
+		0x00                                   					// End of list
     };
 
     XC = ILI9341_COLADDRSET;
@@ -666,8 +713,7 @@ void DISPLAY_SPI::start_display()
     RC = ILI9341_RAMRD;
     SC1 = 0x33;
     SC2 = 0x37;
-    MD = ILI9341_MADCTL;
-    VL = 0;
+    MD = ILI9341_MEMORYACCESS;
     R24BIT = 0; // ILI9341 uses 16-bit color
 
 	init_table8(ILI9341_regValues, sizeof(ILI9341_regValues));
@@ -726,31 +772,6 @@ void DISPLAY_SPI:: init_table8(const void *table, int16_t size)
 			push_command(cmd,dat,len);
 		}
 		size -= len + 2;
-	}
-}
-
-/**
- * @brief Pushes initialization data and commands to the display controller
- * @details This method uses word data. The first word is a command, the second the number of parameters, followed by all the parameters, then next command etc.....
- * @param table - Pointer to table of word data
- * @param size - The number of words in the table 
- */
-void DISPLAY_SPI:: init_table16(const void *table, int16_t size)
-{
-	uint16_t *p = (uint16_t *) table;
-	while (size > 0) 
-	{
-		uint16_t cmd = pgm_read_word(p++);
-		uint16_t d = pgm_read_word(p++);
-		if (cmd == TFTLCD_DELAY16)
-		{
-			delay(d);
-		}
-		else 
-		{
-			write_cmd_data(cmd, d);
-		}
-		size -= 2 * sizeof(int16_t);
 	}
 }
 

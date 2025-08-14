@@ -4,6 +4,7 @@
 /// ILI9341 Register Designations
 ///
 
+#define ILI9341_NOP                0x00
 #define ILI9341_SOFTRESET          0x01
 #define ILI9341_SLEEPIN            0x10
 #define ILI9341_SLEEPOUT           0x11
@@ -17,6 +18,7 @@
 #define ILI9341_PAGEADDRSET        0x2B
 #define ILI9341_MEMORYWRITE        0x2C
 #define ILI9341_MEMORYACCESS       0x36
+#define ILI9341_VSCRSADD           0x37
 #define ILI9341_PIXELFORMAT        0x3A
 #define ILI9341_FRAMECONTROL       0xB1
 #define ILI9341_DISPLAYFUNC        0xB6
@@ -25,9 +27,8 @@
 #define ILI9341_POWERCONTROL2      0xC1
 #define ILI9341_VCOMCONTROL1       0xC5
 #define ILI9341_VCOMCONTROL2       0xC7
-#define ILI9341_UNDEFINE0          0xE0
-#define ILI9341_UNDEFINE1          0xE1
-#define ILI9341_MADCTL             0x36
+#define ILI9341_GMCTRP1            0xE0
+#define ILI9341_GMCTRN1            0xE1
 
 #define ILI9341_MADCTL_MY  0x80
 #define ILI9341_MADCTL_MX  0x40

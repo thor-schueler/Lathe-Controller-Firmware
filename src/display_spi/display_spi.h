@@ -263,21 +263,11 @@ class DISPLAY_SPI:public DISPLAY_GUI
 		 */
 		void init_table8(const void *table, int16_t size);
 		
-		/**
-		 * @brief Pushes initialization data and commands to the display controller
-		 * @details This method uses word data. The first word is a command, the second the number of parameters, followed by all the parameters, then next command etc.....
-		 * @param table - Pointer to table of word data
-		 * @param size - The number of words in the table 
-		 */	
-		void init_table16(const void *table, int16_t size);
 
-		uint8_t xoffset,yoffset;
     	uint16_t rotation;
 		unsigned int width = WIDTH;
 		unsigned int height = HEIGHT;
-		uint16_t XC,YC,CC,RC,SC1,SC2,MD,VL,R24BIT;
+		uint16_t XC,YC,CC,RC,SC1,SC2,MD,R24BIT;
 		SPIClass *spi = NULL;
-		volatile uint32_t *spicsPort, *spicdPort, *spimisoPort , *spimosiPort, *spiclkPort;
-		uint8_t  spicsPinSet, spicdPinSet  ,spimisoPinSet , spimosiPinSet , spiclkPinSet, spicsPinUnset, spicdPinUnset, spimisoPinUnset,  spimosiPinUnset,spiclkPinUnset;
 };
 #endif
