@@ -12,8 +12,8 @@
 #define I_MAIN_POWER 4
 #define I_EMS 34
 #define I_ENERGIZE 39
-#define I_FOR_F 35
-#define I_FOR_B 36
+#define I_FOR_F 36
+#define I_FOR_B 35
 #define I_LIGHT 22
 #define I_CONTROLBOARD_DETECT 27
 #define I_SPINDLE_PULSE 33

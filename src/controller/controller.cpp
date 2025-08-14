@@ -99,7 +99,7 @@ Controller::Controller()
     Logger.Info("....Initializing Input Values");  
     _main_power = digitalRead(I_MAIN_POWER);
     _has_emergency = digitalRead(I_EMS);
-    _toggle_energize = digitalRead(I_ENERGIZE);
+    _toggle_energize = digitalRead(I_ENERGIZE) == LOW;
     _for_f = digitalRead(I_FOR_F);
     _for_b = digitalRead(I_FOR_B);
     _light = digitalRead(I_LIGHT);
@@ -221,41 +221,47 @@ void Controller::input_runner(void* args)
     Controller *_this = reinterpret_cast<Controller *>(args);
     for (;;) 
     { 
+        bool should_print = false;
         //
         // read input states
         //
         vTaskDelay(pdMS_TO_TICKS(DEBOUNCE_MS));
-        Logger.Info_f(F("         Energized: %d - %d"), digitalRead(I_MAIN_POWER), _this->_main_power); 
         if(digitalRead(I_MAIN_POWER) != _this->_main_power) 
         {
             _this->_main_power = !_this->_main_power;
+            should_print = true;
             Logger.Info_f(F("Main Power changed to: %s"), _this->_main_power ? "Off" : "On");
         }
         if(digitalRead(I_EMS) != _this->_has_emergency) 
         {
             _this->_has_emergency = !_this->_has_emergency;
+            should_print = true;
             Logger.Info_f(F("EMS changed to: %s"), _this->_has_emergency ? "Shutdown" : "Energize");
         }
         if(digitalRead(I_LIGHT) != _this->_light) 
         {
             _this->_light = !_this->_light;
-            Logger.Info_f(F("Light toggled: %s"), _this->_light ? "On" : "Off");
+            should_print = true;
+            Logger.Info_f(F("Light toggled: %s"), _this->_light ? "Off" : "On");
         }
         if(digitalRead(I_FOR_F) != _this->_for_f) 
         {
             _this->_for_f = !_this->_for_f;
              _this->_direction_a.desired = _this->_for_f;
+             should_print = true;
             Logger.Info_f(F("Forward Direction changed to: %s"), _this->_for_f ? "On" : "Off");
         }
         if(digitalRead(I_FOR_B) != _this->_for_b) 
         {
             _this->_for_b = !_this->_for_b;
             _this->_direction_b.desired = _this->_for_b;
+            should_print = true;
             Logger.Info_f(F("Backward Direction changed to: %s"), _this->_for_b ? "On" : "Off");
         }
         if(digitalRead(I_CONTROLBOARD_DETECT) != _this->_is_energized) 
         {
             _this->_is_energized = !_this->_is_energized;
+            should_print = true;
             Logger.Info_f(F("Engine power: %s"), _this->_is_energized ? "Hot" : "Cold");
         }
 
@@ -279,31 +285,34 @@ void Controller::input_runner(void* args)
                 _this->_direction_a.desired = false;
                 _this->_for_f = false;
             }            
-            if(_this->_common.desired != _this->_common.reported) digitalWrite(O_SPINDLE_OFF, HIGH);            
+            if(_this->_common.desired != _this->_common.reported) digitalWrite(O_SPINDLE_OFF, _this->_common.desired);            
         }
 
         if(_this->_toggle_energize)
         {
+            unsigned int loop_break_counter = 0;
             if(_this->_is_energized)
             {
-                Logger.Info_f("     De-Energizing engine...");
-                digitalWrite(O_SPINDLE_OFF, HIGH);
+                Logger.Info_f("    De-Energizing engine...");
+                digitalWrite(O_ENGINE_DISCHARGE, HIGH);
                 do { 
                     _this->_is_energized = digitalRead(I_CONTROLBOARD_DETECT); 
+                    loop_break_counter++;
                     vTaskDelay(10);
                 }
-                while (_this->_is_energized);
-                digitalWrite(O_SPINDLE_OFF, LOW);
+                while (_this->_is_energized && loop_break_counter < 1000);
+                digitalWrite(O_ENGINE_DISCHARGE, LOW);
             }
             else
             {
-                Logger.Info_f("     Energizing engine...");
+                Logger.Info_f("    Energizing engine...");
                 do { 
                     // power on happens on the motor control board, we just wait until we read the voltage
                     _this->_is_energized = digitalRead(I_CONTROLBOARD_DETECT);
+                    loop_break_counter++;
                     vTaskDelay(10); 
                 }
-                while (_this->_is_energized);
+                while (!_this->_is_energized && loop_break_counter < 1000);
             }
             _this->_toggle_energize = false;
         }
@@ -312,12 +321,15 @@ void Controller::input_runner(void* args)
         _this->_direction_b.reported = digitalRead(O_SPINDLE_DIRECTION_SWITCH_B);
         _this->_common.reported = digitalRead(O_SPINDLE_OFF);
         _this->_deenergize.reported = digitalRead(O_ENGINE_DISCHARGE);
-        Logger.Info  (F("Status:"));
-        Logger.Info_f(F("    Engine power: %s"), _this->_is_energized ? "Hot" : "Cold");
-        Logger.Info_f(F("    Direction Relay A: %s"), _this->_direction_a.reported ? "Forward" : "Backward");
-        Logger.Info_f(F("    Direction Relay B: %s"), _this->_direction_b.reported ? "Forward" : "Backward");
-        Logger.Info_f(F("    Direction Relay Common: %s"), _this->_common.reported ? "Closed" : "Open");
-        Logger.Info_f(F("    Denergize Relay: %s"), _this->_deenergize.reported ? "Open" : "Closed");
+        if(should_print)
+        {
+            Logger.Info  (F("Status:"));
+            Logger.Info_f(F("    Engine power: %s"), _this->_is_energized ? "Hot" : "Cold");
+            Logger.Info_f(F("    Direction Relay A: %s"), _this->_direction_a.reported ? "Reverse" : "Forward");
+            Logger.Info_f(F("    Direction Relay B: %s"), _this->_direction_b.reported ? "Reverse" : "Forward");
+            Logger.Info_f(F("    Direction Relay Common: %s"), _this->_common.reported ? "Energized" : "Off");
+            Logger.Info_f(F("    Denergize Relay: %s"), _this->_deenergize.reported ? "Open" : "Closed");
+        }
 
         //
         // block execution until next event trigger
