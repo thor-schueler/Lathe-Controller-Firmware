@@ -5,6 +5,7 @@
 // OR BREAKOUT BOARD USAGE.
 
 #include <SPI.h>
+#include "../logging/SerialLogger.h"
 #include "display_spi.h"
 #include "lcd_spi_registers.h"
 #include "mcu_spi_magic.h"
@@ -39,6 +40,7 @@ DISPLAY_SPI::DISPLAY_SPI()
 	spi->setBitOrder(MSBFIRST);
 	spi->setDataMode(SPI_MODE0);
 
+	pinMode(RS, OUTPUT);
 	rotation = 0;
 	width = WIDTH;
 	height = HEIGHT;
@@ -633,8 +635,6 @@ void DISPLAY_SPI::set_addr_window(unsigned int x1, unsigned int y1, unsigned int
  */
 void DISPLAY_SPI::start_display()
 {
-	reset();
-
 	// ILI9341 initialization sequence
     static const uint8_t ILI9341_regValues[] PROGMEM = {
         0xEF, 3, 0x03, 0x80, 0x02,								// Prepares the controller for extended command access
@@ -719,6 +719,7 @@ void DISPLAY_SPI::start_display()
 	init_table8(ILI9341_regValues, sizeof(ILI9341_regValues));
 	set_rotation(rotation); 
 	invert_display(false);
+	Logger.Info(F("....ILI9341 display startup done."));
 }
 
 /**

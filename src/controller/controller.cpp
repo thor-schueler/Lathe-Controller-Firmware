@@ -115,7 +115,7 @@ Controller::Controller()
     _display_mutex = xSemaphoreCreateBinary();  xSemaphoreGive(_display_mutex);
 
     Logger.Info("....Create various tasks");
-    xTaskCreatePinnedToCore(display_runner, "displayRunner", 8192, this, 1, &_display_runner, 0);
+    //xTaskCreatePinnedToCore(display_runner, "displayRunner", 8192, this, 1, &_display_runner, 0);
     xTaskCreatePinnedToCore(input_runner, "inputRunner", 2048, this, configMAX_PRIORITIES-1, &_input_runner, 0);
     xTaskCreatePinnedToCore(rpm_runner, "rpmRunner", 2048, this, configMAX_PRIORITIES-1, &_rpm_runner, 0);
 
@@ -223,6 +223,7 @@ void Controller::input_runner(void* args)
     for (;;) 
     { 
         bool should_print = false;
+
         //
         // read input states
         //
@@ -274,6 +275,7 @@ void Controller::input_runner(void* args)
         {
             if(!_this->_is_energized)
             {
+                digitalWrite(O_ENGINE_DISCHARGE, LOW);
                 if(_this->_for_f)
                 {
                     digitalWrite(O_SPINDLE_DIRECTION_SWITCH_A, LOW);

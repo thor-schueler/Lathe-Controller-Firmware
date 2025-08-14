@@ -22,13 +22,13 @@ Controller_Display::Controller_Display() {}
 void Controller_Display::init()
 {
     DISPLAY_SPI::init();
-    //draw_background(lcars, lcars_size);
-    test();
+    draw_background(lcars, lcars_size);
+    //test();
     
-    toggle_backlight(false);
+    //toggle_backlight(false);
     Logger.Info_f(F("....Free heap: %d"), ESP.getFreeHeap());
     Logger.Info_f(F("....Largest free block: %d"), heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
-    Logger.Info(F("Done."));
+    Logger.Info(F("....Done."));
 }
 
 /**
