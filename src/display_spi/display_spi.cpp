@@ -61,7 +61,7 @@ uint16_t DISPLAY_SPI::RGB_to_565(uint8_t r, uint8_t g, uint8_t b)
 
 /**
  * @brief draw backgound image on the display
- * @param image - array to image containing 3 6-bit color values per pixel
+ * @param image - array to image containing 565 color values per pixel
  * @param size - the number of elements in the image (should be wxhx3)
  */
 void DISPLAY_SPI::draw_background(const unsigned char* image, size_t size)
@@ -117,7 +117,7 @@ void DISPLAY_SPI::draw_bitmap(uint8_t x,uint8_t y,uint8_t width, uint8_t height,
 
 /**
  * @brief draw image on the display
- * @param image - array to image containing 3 6-bit color values per pixel
+ * @param image - array to image containing 565 color values per pixel
  * @param size - the number of elements in the image (should be wxhx3)
  * @param x - starting x coordinate
  * @param y - starting y coordinate
@@ -270,7 +270,7 @@ int16_t DISPLAY_SPI::get_width() const
 void DISPLAY_SPI::init()
 {
 	reset();
-	//toggle_backlight(true);
+	toggle_backlight(true);
 	start_display();
 }
 

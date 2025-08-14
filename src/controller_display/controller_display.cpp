@@ -7,40 +7,25 @@
 #include "controller_display.h"
 #include "../logging/SerialLogger.h"
 
+const unsigned int rpm_x = 218;
+const unsigned int rpm_y = 50;
 
 /**
  * @brief Generates a new instance of the Controller_Display class. 
  * @details initializes the SPI and LCD pins including CS, RS, RESET 
  */
-Controller_Display::Controller_Display()
-{
-    w_area_x1 = 20;
-    w_area_y1 = 20;
-    w_area_x2 = 100;
-    w_area_y2 = 100;
-    w_area_cursor_x = 0;
-    w_area_cursor_y = 0;
-}
+Controller_Display::Controller_Display() {}
 
 /**
  * @brief Initializes the display
  */
 void Controller_Display::init()
 {
-    //uint32_t buffer_size = (w_area_x2-w_area_x1)*(w_area_y2-w_area_y1)*3/2;
     DISPLAY_SPI::init();
-    draw_background(lcars, lcars_size);
-    //test();
-
-    //Logger.Info(F("Attempting allocation of screen scrolling memory buffer..."));
-    //Logger.Info_f(F("....Largest free block: %d"), heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
-    //buf1 = (uint8_t *)heap_caps_malloc(buffer_size, MALLOC_CAP_8BIT);
-    //if(buf1 == nullptr) Logger.Error(F("....Allocation of upper scroll buffer (buf1) did not succeed"));
-    //else Logger.Info(F("....Allocation of upper scroll buffer (buf1) successful"));
-
-    //buf2 = (uint8_t *)heap_caps_malloc(buffer_size, MALLOC_CAP_8BIT);
-    //if(buf2 == nullptr) Logger.Error(F("....Allocation of lower scroll buffer (buf2) did not succeed"));
-    //else Logger.Info(F("....Allocation of lower scroll buffer (buf2) successful"));
+    //draw_background(lcars, lcars_size);
+    test();
+    
+    toggle_backlight(false);
     Logger.Info_f(F("....Free heap: %d"), ESP.getFreeHeap());
     Logger.Info_f(F("....Largest free block: %d"), heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
     Logger.Info(F("Done."));
@@ -56,121 +41,8 @@ void Controller_Display::init()
  */
 size_t Controller_Display::print(uint8_t *st, int16_t x, int16_t y, int16_t xo, int16_t yo) 
 {
-  return Controller_Display::print(st, x, y, xo, yo);
+  return DISPLAY_GUI::print(st, x, y, xo, yo);
 };
-
-/**
- * @brief Print a string in the working area. Advances the cursor to keep track of position
- * @param c - Font color to use.
- * @param s - String to print
- */
-void Controller_Display::w_area_print(String s, uint16_t c, bool newline)
-{
-    if(!w_area_initialized)
-    {
-      fill_rect(w_area_x1, w_area_y1, w_area_x2-w_area_x1, w_area_y2-w_area_y1, 0x0000);
-      w_area_initialized = true;
-    }
-    set_text_color(c);
-    set_text_back_color(0x0);
-    set_text_size(1);
-    //while(w_area_y1 + w_area_cursor_y > w_area_y2 - text_size*8)
-    //{
-    //    // scroll display area to make space
-    //    window_scroll(w_area_x1, w_area_y1, w_area_x2-w_area_x1, w_area_y2-w_area_y1, 
-    //        0, text_size*8, buf1, buf2, text_size*8);
-    //    w_area_cursor_y = w_area_cursor_y - text_size*8;
-    //}
-
-    print_string(s, w_area_cursor_x, w_area_cursor_y, w_area_x1, w_area_y1);
-    w_area_cursor_x = get_text_X_cursor();
-    w_area_cursor_y = get_text_Y_cursor();
-    if(newline)
-    {
-        print_string("\n", w_area_cursor_x, w_area_cursor_y, w_area_x1, w_area_y1);
-        w_area_cursor_x = 0;
-        w_area_cursor_y = get_text_Y_cursor();
-    }
-
-}
-
-void Controller_Display::draw_arrow(int16_t x, int16_t y, Direction d, uint8_t size, int16_t fg, int16_t bg)
-{
-    const uint8_t _w = 8;
-    const uint8_t _h = 5;
-    if(d == Direction::LEFT || d == Direction::RIGHT)
-    {
-      fill_rect(x, y, _w*size, _h*size, bg);
-      int _height = _h * size; 
-      int _width = 2 * size; 
-      int mid = ((_height+1)&~1)/2 - 1;
-      int c = 0;
-      if(d==Direction::LEFT)
-      {
-        fill_rect(x+size+2, y+((_h*size+1)&~1)/2-size+1, _w*(size-1), size, fg);
-        for(int i=0; i < 2-size%2 ; i++) for(int k=0; k<_width; k++) draw_pixel(x+size+k, y+mid+i, fg);
-        for(int i=0; i < mid ; i++)
-        {
-          c++;
-          for(int k=c; k<_width; k++)
-          {
-              draw_pixel(x+size+k, y+mid-1-i, fg);
-              draw_pixel(x+size+k, y+mid+1+i, fg);
-          }
-        } 
-      }
-      else
-      {  
-        fill_rect(x+size, y+((_h*size+1)&~1)/2-size+1, _w*(size-1), size, fg);
-        for(int i=0; i < 2-size%2 ; i++) for(int k=0; k<_width; k++) draw_pixel(x-k+(_w*size)-size-1, y+mid+i, fg);
-        for(int i=0; i < mid ; i++)
-        {
-          c++;
-          for(int k=c; k<_width; k++)
-          {
-              draw_pixel(x+_w*size-k-4, y+mid-1-i, fg);
-              draw_pixel(x+_w*size-k-4, y+mid+1+i, fg);
-          }
-        } 
-      }
-    }
-    else
-    {
-      int _width = _h * size; 
-      int _height = 2 * size; 
-      int mid = ((_width+1)&~1)/2 - 1;
-      int c = 0;
-      fill_rect(x, y, _h*size, _w*size, bg);
-      if(d==Direction::UP)
-      {
-        fill_rect(x+((_h*size+1)&~1)/2-size+1, y+size+2, size, _w*(size-1), fg);
-        for(int i=0; i < 2-size%2 ; i++) for(int k=0; k<_width; k++) draw_pixel(x+mid+i, y+size+k, fg);
-        for(int i=0; i < mid ; i++)
-        {
-          c++;
-          for(int k=c; k<_height; k++)
-          {
-              draw_pixel(x+mid-1-i, y+size+k ,fg);
-              draw_pixel(x+mid+1+i, y+size+k ,fg);
-          }
-        } 
-      }   
-      else
-      {
-        fill_rect(x+((_h*size+1)&~1)/2-size+1, y+size, size, _w*(size-1), fg);
-        for(int i=0; i < 2-size%2 ; i++) for(int k=0; k<_width; k++) draw_pixel(x+mid+i, y+_w*size-k-size-1, fg);
-        for(int i=0; i < mid ; i++)
-        {
-          c++;
-          for(int k=c; k<_height; k++)
-          {
-              draw_pixel(x+mid-1-i, y+_w*size-k-size-1 ,fg);
-              draw_pixel(x+mid+1+i, y+_w*size-k-size-1 ,fg);
-          }
-        } 
-      }   
-    }
-}
 
 /**
  * @brief Implements scrolling for partial screen, both horizontally and vertically
@@ -274,218 +146,161 @@ void Controller_Display::window_scroll(int16_t x, int16_t y, int16_t w, int16_t 
  * shapes and information
  */
 void Controller_Display::test()
-{
- 
-  int w = w_area_x2 - w_area_x1;
-  int h = w_area_y2 - w_area_y1;
-
+{ 
   draw_background(lcars, lcars_size);
-  fill_rect(w_area_x1, w_area_y1, w, h, 0xf800); vTaskDelay(500);
-  fill_rect(w_area_x1, w_area_y1, w, h, 0x07E0); vTaskDelay(500);
-  fill_rect(w_area_x1, w_area_y1, w, h, 0x001F); vTaskDelay(500);
-  fill_rect(w_area_x1, w_area_y1, w, h, 0x0);
-  for(int i=0;i<50;i++)
+  fill_rect(0, 0, this->width, this->height, 0xf800); vTaskDelay(500);
+  fill_rect(0, 0, this->width, this->height, 0x07E0); vTaskDelay(500);
+  fill_rect(0, 0, this->width, this->height, 0x001F); vTaskDelay(500);
+  fill_rect(0, 0, this->width, this->height, 0x0);
+  for(int i=0; i<50; i++)
   {
     set_draw_color(random(65535));
     draw_rectangle(
-      w_area_x1 + random(w), 
-      w_area_y1 + random(h),
-      w_area_x1 + random(w),
-      w_area_y1 + random(h)
+      0 + random(this->width), 
+      0 + random(this->height),
+      0 + random(this->width),
+      0 + random(this->height)
     );
     vTaskDelay(100);
   }
-  fill_rect(w_area_x1, w_area_y1, w, h, 0x0);
-  for(int i=0;i<50;i++)
+  fill_rect(0, 0, this->width, this->height, 0x0);
+  for(int i=0; i<50; i++)
   {
-    int x1 = w_area_x1 + random(w);
-    int y1 = w_area_y1 + random(h);
-    int x2 = w_area_x1 + random(w);
-    int y2 = w_area_y1 + random(h);
+    int x1 = 0 + random(this->width);
+    int y1 = 0 + random(this->height);
+    int x2 = 0 + random(this->width);
+    int y2 = 0 + random(this->height);
     int r = (x2>x1?x2-x1:x1-x2)>(y2>y1?y2-y1:y1-y2) ? random((y2>y1?y2-y1:y1-y2)/4) : random((x2>x1?x2-x1:x1-x2)/4);
     set_draw_color(random(65535));
     draw_round_rectangle(x1, y1, x2, y2, r); 
     vTaskDelay(100);
   }
-  fill_rect(w_area_x1, w_area_y1, w, h, 0x0);
-  for(int i=0;i<50;i++)
+  fill_rect(0, 0, this->width, this->height, 0x0);
+  for(int i=0; i<50; i++)
   {
     set_draw_color(random(65535));
     draw_triangle(
-      w_area_x1 + random(w), 
-      w_area_y1 + random(h),
-      w_area_x1 + random(w), 
-      w_area_y1 + random(h), 
-      w_area_x1 + random(w), 
-      w_area_y1 + random(h)
+      0 + random(this->width), 
+      0 + random(this->height),
+      0 + random(this->width), 
+      0 + random(this->height), 
+      0 + random(this->width), 
+      0 + random(this->height)
     );
   }
-  fill_rect(w_area_x1, w_area_y1, w, h, 0x0);
-  for(int i=0;i<50;i++)
+  fill_rect(0, 0, this->width, this->height, 0x0);
+  for(int i=0; i<50; i++)
   {
-    uint16_t r = w>h ? random(h/2) : random(w/2);
+    uint16_t r = this->width > this->height ? random(this->height/2) : random(this->width/2);
     set_draw_color(random(65535));
     draw_circle(
-      w_area_x1 + r + random(w), 
-      w_area_y1 + r + random(h),
+      0 + r + random(this->width), 
+      0 + r + random(this->height),
       r
     );
   }
-  fill_rect(w_area_x1, w_area_y1, w, h+4, 0x0);
+  fill_rect(0, 0, this->width, this->height+4, 0x0);
   set_text_back_color(0x0);
   set_text_color(0xf800);
-  set_text_size(5);
-  print_string("The End", w_area_x1+20, w_area_y1+20);
+  set_text_size(3);
+  print_string("The End", 20, 20);
 
   vTaskDelay(5000);
-  fill_rect(w_area_x1, w_area_y1, w, h, 0x0);
+  fill_rect(0, 0, this->width, this->height, 0x0);
 }
 
 /**
- * @brief Writes the currently selected Axis into the display
- * @param axis - The value for the axis to print
+ * @brief Updates the back light state icon.
+ * @param lighted - True if light it on, false otherwise.
  */
-void Controller_Display::write_axis(Axis axis)
+void Controller_Display::update_back_light(bool lighted)
 {
-    set_text_back_color(RGB_to_565(177,0,254));
-    set_text_color(0xffff);
-    set_text_size(4);
-    switch(axis)
-    {
-        case X: print_string("X", 155, 158); break;
-        case Y: print_string("Y", 155, 158); break;
-        case Z: print_string("Z", 155, 158); break;
-    }
-
+  draw_image(lighted ? backlight_on : backlight_off, lighted ? backlight_on_size : backlight_off_size, backlight_x, backlight_y, backlight_w, backlight_h);
 }
 
 /**
- * @brief Writes the last command into the display
- * @param c - the command name.
+ * @brief Updates the engine state icon.
+ * @param energized - True if state it engergized, false otherwise.
  */
-void Controller_Display::write_command(String c)
+void Controller_Display::update_engine_state(bool energized)
 {
-    fill_rect(136, 101, 300, 9, RGB_to_565(127,106,0));
-    set_text_back_color(RGB_to_565(127,106,0));
-    set_text_color(0xffffff);
-    set_text_size(1);
-    print_string(c, 141, 101);  
+  const unsigned char* icon = energized ? engine_on : engine_off;
+  const size_t size = energized ? engine_on_size : engine_off_size;
+  draw_image(icon, size, engine_x, engine_y, engine_w, engine_h);
 }
 
 /**
- * @brief Writes emergency indicator to the disaply
- * @param has_emergency - Whether there is an emergency or not.
+ * @brief Updates the FOR status icons.
+ * @param for_f - True if FOR forward switch is on.
+ * @param for_b - True if FOR backward switch is on.
+ */
+void Controller_Display::update_for_state(bool for_f, bool for_b)
+{
+  draw_image((for_f && !for_b) ? forward_on : forward_off, (for_f && !for_b) ? forward_on_size : forward_off_size, forward_x, forward_y, forward_w, forward_y);
+  draw_image((for_f && for_b) ? neutral_on : neutral_off, (for_f && for_b) ? neutral_on_size : neutral_off_size, neutral_x, neutral_y, neutral_w, neutral_y);
+  draw_image((!for_f && for_b) ? backward_on : backward_off, (!for_f && for_b) ? backward_on_size : backward_off_size, backward_x, backward_y, backward_w, backward_y);
+}
+
+/**
+ * @brief Updates the light state icon.
+ * @param lighted - True if light it on, false otherwise.
+ */
+void Controller_Display::update_light_state(bool lighted)
+{
+  draw_image(lighted ? light_on : light_off, lighted ? light_on_size : light_off_size, light_x, light_y, light_w, light_h);
+}
+
+/**
+ * @brief Updates the lube state icon.
+ * @param active - True if lube is on, false otherwise.
+ */
+void Controller_Display::update_lube_state(bool active)
+{
+  draw_image(active ? lube_on : lube_off, active ? lube_on_size : lube_off_size, lube_x, lube_y, lube_w, lube_h);
+}
+
+/**
+ * @brief Updates the power state icon.
+ * @param energized - True if state it powered, false otherwise.
+ */
+void Controller_Display::update_power_state(bool powered)
+{
+  const unsigned char* icon = powered ? power_on : power_off;
+  const size_t size = powered ? power_on_size : power_off_size;
+  draw_image(icon, size, power_x, power_y, power_w, power_h);
+}
+
+/**
+ * @brief Writes emergency indicator to the display
 */
-void Controller_Display::write_emergency(bool has_emergency)
+void Controller_Display::write_emergency()
 {
-  if(has_emergency)
-  {
-    fill_rect(0, 50, 66, 24, 0xf800);
-    fill_rect(66, 51, 1, 23, RGB_to_565(0x7f,0x0,0x0));
-  }
-  else
-  {
-    fill_rect(0, 50, 66, 24, RGB_to_565(75, 255, 0));
-    fill_rect(1,50, 64, 1, RGB_to_565(28, 87, 3));
-    fill_rect(1,73, 64, 1, RGB_to_565(61, 207, 0));
-    fill_rect(0,51, 1, 22, RGB_to_565(51, 201, 0));
-    fill_rect(66,51, 1, 22, RGB_to_565(61, 140, 25));   
-    draw_pixel(0, 50, 0x0);
-    draw_pixel(66, 50, 0x0);
-    draw_pixel(0, 73, RGB_to_565(26, 145, 0));
-    draw_pixel(66, 73, RGB_to_565(39, 102, 11)); 
-  }
+  this->draw_background(ems, ems_size);
 }
 
 /**
- * @brief Writes the current feed selection to the display
- * @param feed - The value for the feed selection to write
+ * @brief Writes the current rpm to the display
+ * @param rpm - The value for the rpm to write
  */
-void Controller_Display::write_feed(float feed)
+void Controller_Display::write_rpm(unsigned int rpm)
 {
-    set_text_back_color(RGB_to_565(177,0,254));
-    set_text_color(0xffffff);
-    set_text_size(3);
-    print_number_float(feed, 3, 90, 210, '.', 5, ' ');
-}
-
-/**
- * @brief Writes a status message to  the display
- * @param format - format sting for the message.
- * @param ... Argument list for the token replacement in the format string.
- */
-void Controller_Display::write_status(const String &format, ...)
-{
-    char *buf = NULL;
-    va_list copy;
-    va_list args; 
-
-    fill_rect(136, 114, 300, 9, RGB_to_565(127,106,0));
-    set_text_back_color(RGB_to_565(127,106,0));
-    set_text_color(0xffffff);
-    set_text_size(1);
-
-    // Determine the size of the formatted string 
-    va_start(args, format); 
-    va_copy(copy, args);
-    int len = vsnprintf(nullptr, 0, format.c_str(), args);
-    if(len < 0) {
-      // error condition, most likely in the format string. 
-      va_end(args);
-      va_end(copy);
-      return;
-    };
+  if (rpm > 9999) rpm = 9999; // clamp to max
     
-    // allocate memory for the operation
-    buf = (char*) malloc(len+1);
-    if(buf == NULL) {
-      // memory allocation error.
-      va_end(args); 
-      va_end(copy);
-      return;
-    }
+  // Extract digits into a buffer (max 4 digits)
+  uint8_t digit[4];
+  uint8_t count = 0;
+  do {
+      digit[count++] = rpm % 10;
+      rpm /= 10;
+  } while (rpm > 0 && count < 4);
 
-    // Format the string  
-    vsnprintf(buf, len+1, format.c_str(), copy);
-    va_end(copy); 
-    va_end(args);
-
-    print_string(String(buf), 141, 114);
-    free(buf);  
+  // Render digits from least to most significant (right to left)
+  int16_t x = rpm_x;
+  for (int i = 0; i < count; i++) {
+    uint8_t dig = digit[i];
+    uint8_t w = digit_width[dig];
+    x -= w;
+    draw_image(digits[dig], digit_size[dig], x, rpm_y, w, digit_h);
+  }
 }
 
-/**
- * @brief Writes the current x position to the display
- * @param x - The value for the x position to write
- */
-void Controller_Display::write_x(float x)
-{
-    set_text_back_color(RGB_to_565(177,0,254));
-    set_text_color(0xffffff);
-    set_text_size(2);
-    print_number_float(x, 3, 128, 65, '.', 7, ' ');
-}
-
-/**
- * @brief Writes the current y position to the display
- * @param y - The value for the y position to write
- */
-void Controller_Display::write_y(float y)
-{
-    set_text_back_color(RGB_to_565(177,0,254));
-    set_text_color(0xffffff);
-    set_text_size(2);
-    print_number_float(y, 3, 238, 65, '.', 7, ' ');
-}
-
-/**
- * @brief Writes the current z position to the display
- * @param z - The value for the z position to write
- */
-void Controller_Display::write_z(float z)
-{
-    set_text_back_color(RGB_to_565(177,0,254));
-    set_text_color(0xffffff);
-    set_text_size(2);
-    print_number_float(z, 3, 348, 65, '.', 7, ' ');
-}

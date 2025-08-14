@@ -41,7 +41,7 @@ class DISPLAY_SPI:public DISPLAY_GUI
 
 		/**
 		 * @brief draw backgound image on the display
-		 * @param image - array to image containing 3 6-bit color values per pixel
+		 * @param image - array to image containing 565 color values per pixel
 		 * @param size - the number of elements in the image (should be wxhx3)
 		 */
 		void draw_background(const unsigned char* image, size_t size) override;
@@ -59,7 +59,7 @@ class DISPLAY_SPI:public DISPLAY_GUI
 
 		/**
 		 * @brief draw image on the display
-		 * @param image - array to image containing 3 6-bit color values per pixel
+		 * @param image - array to image containing 565 color values per pixel
 		 * @param size - the number of elements in the image (should be wxhx3)
 		 * @param x - starting x coordinate
 		 * @param y - starting y coordinate

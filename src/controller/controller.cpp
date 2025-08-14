@@ -174,36 +174,37 @@ void Controller::display_runner(void* args)
     { 
         if (xSemaphoreTake(_this->_display_mutex, portMAX_DELAY) == pdTRUE) 
         {
-            //int16_t cf = _this->_display->RGB_to_565(0x00, 0xff, 0x00);
-            //int16_t cb = _this->_display->RGB_to_565(0xff, 0x00, 0x00);
-            //int16_t cn = _this->_display->RGB_to_565(177,0,254);
-            //int16_t cback = _this->_display->RGB_to_565(177,0,254);
-            
-            //_this->_display->write_axis(_this->_selected_axis);
-            //_this->_display->write_feed(_this->_selected_feed);
-            //_this->_display->write_emergency(_this->_has_emergency);
-            //_this->_display->write_x(_this->_x);
-            //_this->_display->write_y(_this->_y);
-            //_this->_display->write_z(_this->_z);
+            if(_this->_has_emergency)
+            {
+                // draw emergency shutdown screen
+                _this->_display->write_emergency();
+            }
+            else
+            {
+                // draw background
+                _this->_display->draw_background(lcars, lcars_size);
 
-            //if(_this->_direction == 1)
-            //{
-            //    _this->_display->draw_arrow(185, 14, Direction::RIGHT, 3, _this->_selected_axis == Axis::X ? cf : cn, cback);
-            //    _this->_display->draw_arrow(305, 14, Direction::DOWN, 3, _this->_selected_axis == Axis::Y ? cb : cn, cback);
-            //    _this->_display->draw_arrow(415, 14, Direction::UP, 3, _this->_selected_axis == Axis::Z ? cf : cn, cback);
-            //}
-            //else if(_this->_direction == -1)
-            //{
-            //    _this->_display->draw_arrow(185, 14, Direction::LEFT, 3, _this->_selected_axis == Axis::X ? cb : cn, cback);
-            //    _this->_display->draw_arrow(305, 14, Direction::UP, 3, _this->_selected_axis == Axis::Y ? cf : cn, cback);
-            //    _this->_display->draw_arrow(415, 14, Direction::DOWN, 3, _this->_selected_axis == Axis::Z ? cb : cn, cback);
-            //}
-            //else
-            //{
-            //    _this->_display->draw_arrow(185, 14, Direction::LEFT, 3, cn, cback);
-            //    _this->_display->draw_arrow(305, 14, Direction::UP, 3, cn, cback);
-            //    _this->_display->draw_arrow(415, 14, Direction::UP, 3, cn, cback);
-            //}
+                // write RPMs to display
+                _this->_display->write_rpm(_this->_rpm);
+
+                // update engine energized state
+                _this->_display->update_engine_state(_this->_is_energized);
+
+                // update power state
+                _this->_display->update_power_state(_this->_main_power);
+
+                // update FOR state
+                _this->_display->update_for_state(_this->_for_f, _this->_for_b);
+
+                // update light state
+                _this->_display->update_light_state(_this->_light);
+
+                // update backlight state
+                _this->_display->update_back_light(false);
+
+                // update lube state
+                _this->_display->update_lube_state(false);
+            }
             xSemaphoreGive(_this->_display_mutex);
         }
         vTaskDelay(10);
@@ -269,52 +270,62 @@ void Controller::input_runner(void* args)
         // take appropriate action
         //
         _this->_common.desired = (!_this->_for_b && !_this->_for_f) ? false : true;
-        if(!_this->_is_energized)
+        if(!_this->_has_emergency)
         {
-            if(_this->_for_f)
+            if(!_this->_is_energized)
             {
-                digitalWrite(O_SPINDLE_DIRECTION_SWITCH_A, LOW);
-                digitalWrite(O_SPINDLE_DIRECTION_SWITCH_B, LOW);
-                _this->_direction_b.desired = false;
-                _this->_for_b = false;
+                if(_this->_for_f)
+                {
+                    digitalWrite(O_SPINDLE_DIRECTION_SWITCH_A, LOW);
+                    digitalWrite(O_SPINDLE_DIRECTION_SWITCH_B, LOW);
+                    _this->_direction_b.desired = false;
+                    _this->_for_b = false;
+                }
+                if(_this->_for_b)
+                {
+                    digitalWrite(O_SPINDLE_DIRECTION_SWITCH_A, HIGH);
+                    digitalWrite(O_SPINDLE_DIRECTION_SWITCH_B, HIGH);
+                    _this->_direction_a.desired = false;
+                    _this->_for_f = false;
+                }            
+                if(_this->_common.desired != _this->_common.reported) digitalWrite(O_SPINDLE_OFF, _this->_common.desired);            
             }
-            if(_this->_for_b)
-            {
-                digitalWrite(O_SPINDLE_DIRECTION_SWITCH_A, HIGH);
-                digitalWrite(O_SPINDLE_DIRECTION_SWITCH_B, HIGH);
-                _this->_direction_a.desired = false;
-                _this->_for_f = false;
-            }            
-            if(_this->_common.desired != _this->_common.reported) digitalWrite(O_SPINDLE_OFF, _this->_common.desired);            
-        }
 
-        if(_this->_toggle_energize)
+            if(_this->_toggle_energize)
+            {
+                unsigned int loop_break_counter = 0;
+                if(_this->_is_energized)
+                {
+                    Logger.Info_f("    De-Energizing engine...");
+                    digitalWrite(O_ENGINE_DISCHARGE, HIGH);
+                    do { 
+                        _this->_is_energized = digitalRead(I_CONTROLBOARD_DETECT); 
+                        loop_break_counter++;
+                        vTaskDelay(10);
+                    }
+                    while (_this->_is_energized && loop_break_counter < 1000);
+                    digitalWrite(O_ENGINE_DISCHARGE, LOW);
+                }
+                else
+                {
+                    Logger.Info_f("    Energizing engine...");
+                    do { 
+                        // power on happens on the motor control board, we just wait until we read the voltage
+                        _this->_is_energized = digitalRead(I_CONTROLBOARD_DETECT);
+                        loop_break_counter++;
+                        vTaskDelay(10); 
+                    }
+                    while (!_this->_is_energized && loop_break_counter < 1000);
+                }
+                _this->_toggle_energize = false;
+            }
+        }
+        else
         {
-            unsigned int loop_break_counter = 0;
-            if(_this->_is_energized)
-            {
-                Logger.Info_f("    De-Energizing engine...");
-                digitalWrite(O_ENGINE_DISCHARGE, HIGH);
-                do { 
-                    _this->_is_energized = digitalRead(I_CONTROLBOARD_DETECT); 
-                    loop_break_counter++;
-                    vTaskDelay(10);
-                }
-                while (_this->_is_energized && loop_break_counter < 1000);
-                digitalWrite(O_ENGINE_DISCHARGE, LOW);
-            }
-            else
-            {
-                Logger.Info_f("    Energizing engine...");
-                do { 
-                    // power on happens on the motor control board, we just wait until we read the voltage
-                    _this->_is_energized = digitalRead(I_CONTROLBOARD_DETECT);
-                    loop_break_counter++;
-                    vTaskDelay(10); 
-                }
-                while (!_this->_is_energized && loop_break_counter < 1000);
-            }
-            _this->_toggle_energize = false;
+            Logger.Info(F("Emergceny Shutdown Mode"));
+            digitalWrite(O_ENGINE_DISCHARGE, HIGH);
+            vTaskDelay(1000);
+            digitalWrite(O_SPINDLE_OFF, LOW);
         }
         
         _this->_direction_a.reported = digitalRead(O_SPINDLE_DIRECTION_SWITCH_A);

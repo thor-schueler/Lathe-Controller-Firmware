@@ -7,21 +7,89 @@
 #include "Arduino.h"
 #include "../display_spi/display_spi.h"
 
-#define ARROW_MIDDLE_ADJ(i) (uint8_t)((i <= 5) ? std::ceil(static_cast<float>(i) / 2) : std::floor(static_cast<float>(i - 1) / 3))
-
-typedef enum { X=88, Y=89, Z=90 } Axis;
-struct Feed { 
-	static constexpr float NANO = 0.001f; 
-	static constexpr float MICRO = 0.01f; 
-	static constexpr float MILLI = 0.1f; 
-	static constexpr float FULL = 1.0f;
-};
-typedef enum { UP, DOWN, LEFT, RIGHT} Direction;
-
+#pragma region externals for icons
 extern const unsigned char lcars[] PROGMEM;
-extern const unsigned char splash[] PROGMEM;
+extern const unsigned char ems[] PROGMEM;
 extern const size_t lcars_size;
-extern const size_t splash_size;
+extern const size_t ems_size;
+
+extern const unsigned char engine_on[] PROGMEM;
+extern const unsigned char engine_off[] PROGMEM;
+extern const unsigned int engine_x;
+extern const unsigned int engine_y;
+extern const unsigned int engine_w;
+extern const unsigned int engine_h;
+extern const size_t engine_on_size;
+extern const size_t engine_off_size;
+
+extern const unsigned char power_on[] PROGMEM;
+extern const unsigned char power_off[] PROGMEM;
+extern const unsigned int power_x;
+extern const unsigned int power_y;
+extern const unsigned int power_w;
+extern const unsigned int power_h;
+extern const size_t power_on_size;
+extern const size_t power_off_size;
+
+extern const unsigned char forward_on[] PROGMEM;
+extern const unsigned char forward_off[] PROGMEM;
+extern const unsigned int forward_x;
+extern const unsigned int forward_y;
+extern const unsigned int forward_w;
+extern const unsigned int forward_h;
+extern const size_t forward_on_size;
+extern const size_t forward_off_size;
+
+extern const unsigned char neutral_on[] PROGMEM;
+extern const unsigned char neutral_off[] PROGMEM;
+extern const unsigned int neutral_x;
+extern const unsigned int neutral_y;
+extern const unsigned int neutral_w;
+extern const unsigned int neutral_h;
+extern const size_t neutral_on_size;
+extern const size_t neutral_off_size;
+
+extern const unsigned char backward_on[] PROGMEM;
+extern const unsigned char backward_off[] PROGMEM;
+extern const unsigned int backward_x;
+extern const unsigned int backward_y;
+extern const unsigned int backward_w;
+extern const unsigned int backward_h;
+extern const size_t backward_on_size;
+extern const size_t backward_off_size;
+
+extern const unsigned char light_on[] PROGMEM;
+extern const unsigned char light_off[] PROGMEM;
+extern const unsigned int light_x;
+extern const unsigned int light_y;
+extern const unsigned int light_w;
+extern const unsigned int light_h;
+extern const size_t light_on_size;
+extern const size_t light_off_size;
+
+extern const unsigned char backlight_on[] PROGMEM;
+extern const unsigned char backlight_off[] PROGMEM;
+extern const unsigned int backlight_x;
+extern const unsigned int backlight_y;
+extern const unsigned int backlight_w;
+extern const unsigned int backlight_h;
+extern const size_t backlight_on_size;
+extern const size_t backlight_off_size;
+
+extern const unsigned char lube_on[] PROGMEM;
+extern const unsigned char lube_off[] PROGMEM;
+extern const unsigned int lube_x;
+extern const unsigned int lube_y;
+extern const unsigned int lube_w;
+extern const unsigned int lube_h;
+extern const size_t lube_on_size;
+extern const size_t lube_off_size;
+
+extern const unsigned char* digits[10] PROGMEM;
+extern const size_t digit_size[10] PROGMEM;
+extern const unsigned int digit_width[10] PROGMEM;
+extern const unsigned int digit_h;
+#pragma endregion
 
 /**
  * @brief Implements the display for the handwheel
@@ -34,8 +102,6 @@ class Controller_Display:public DISPLAY_SPI
 		 * @details initializes the SPI and LCD pins including CS, RS, RESET 
 		 */
 		Controller_Display();
-
-		void draw_arrow(int16_t x, int16_t y, Direction d, uint8_t size, int16_t fg, int16_t bg);
 
 		/**
 		 * @brief Initializes the display
@@ -53,67 +119,58 @@ class Controller_Display:public DISPLAY_SPI
 		size_t print(uint8_t *st, int16_t x, int16_t y, int16_t xo=0, int16_t yo=0) override;
 
 		/**
-		 * @brief Print a string in the working area. Advances the cursor to keep track of position
-		 * @param s - String to print
-		 * @param c - Font color to use.
-		 * @param newline - True to add a carriage return
-		 */
-		void w_area_print(String s, uint16_t color, bool newline);
-
-		/**
 		 * @brief Tests the display by going through a routine of drawing various
 		 * shapes and information
 		 */
 		void test();
 
 		/**
-		 * @brief Writes the currently selected Axis into the display
-		 * @param axis - The value for the axis to print
-		 */
-		void write_axis(Axis axis);
+		 * @brief Updates the back light state icon.
+		 * @param lighted - True if light it on, false otherwise.
+		*/
+		void update_back_light(bool lighted);
 
 		/**
-		 * @brief Writes the last command into the display
-		 * @param c - the command name.
-		 */
-		void write_command(String c);
+		 * @brief Updates the engine state icon.
+		 * @param energized - True if state it engergized, false otherwise.
+		*/
+		void update_engine_state(bool energized);
+
+		/**
+		 * @brief Updates the FOR status icons.
+		 * @param for_f - True if FOR forward switch is on.
+		 * @param for_b - True if FOR backward switch is on.
+		*/
+		void update_for_state(bool for_f, bool for_b);
+
+		/**
+		 * @brief Updates the light state icon.
+		 * @param lighted - True if light it on, false otherwise.
+		*/
+		void update_light_state(bool lighted);
+
+		/**
+		 * @brief Updates the lube state icon.
+		 * @param active - True if lube is on, false otherwise.
+		*/
+		void update_lube_state(bool active);
+
+		/**
+		 * @brief Updates the power state icon.
+		 * @param energized - True if state it powered, false otherwise.
+		*/
+		void update_power_state(bool powered);
 
 		/**
 		 * @brief Writes emergency indicator to the disaply
-		 * @param has_emergency - Whether there is an emergency or not.
 		*/
-		void write_emergency(bool has_emergency);
+		void write_emergency();
 
 		/**
-		 * @brief Writes the current feed selection to the display
-		 * @param feed - The value for the feed selection to write
+		 * @brief Writes the current rpm to the display
+		 * @param rpm - The value for the rpm to write
 		 */
-		void write_feed(float feed);
-
-		/**
-		 * @brief Writes a status message to  the display
-		 * @param format - format sting for the message.
-		 * @param ... Argument list for the token replacement in the format string.
-		 */
-		void write_status(const String &format, ...);
-
-		/**
-		 * @brief Writes the current x position to the display
-		 * @param x - The value for the x position to write
-		 */
-		void write_x(float x);
-
-		/**
-		 * @brief Writes the current y position to the display
-		 * @param y - The value for the y position to write
-		 */
-		void write_y(float y);
-
-		/**
-		 * @brief Writes the current z position to the display
-		 * @param z - The value for the z position to write
-		 */
-		void write_z(float z);	
+		void write_rpm(unsigned int rpm);
 
 	protected:
 
@@ -137,12 +194,6 @@ class Controller_Display:public DISPLAY_SPI
 
 	private: 
 
-		uint16_t w_area_x1;
-		uint16_t w_area_y1;
-		uint16_t w_area_x2;
-		uint16_t w_area_y2;
-		uint16_t w_area_cursor_x;
-		uint16_t w_area_cursor_y;
 		uint8_t* buf1 = nullptr;
 		uint8_t* buf2 = nullptr;
 		bool w_area_initialized = false;
