@@ -172,26 +172,6 @@ class Controller_Display:public DISPLAY_SPI
 		 */
 		void write_rpm(unsigned int rpm);
 
-	protected:
-
-		/**
-		 * @brief Implements scrolling for partial screen, both horizontally and vertically
-		 * @param x - the top left of the scrolling area x coordinate
-		 * @param y - the top left of the scrolling area y coordinate
-		 * @param w - the width of the scroll area
-		 * @param h - the height of the scorll area
-		 * @param dx - the ammount to scroll into the x direction
-		 * @param dy - the ammount to scroll tino the y direction
-		 * @param bufh - the upper page buffer. Expected to be w*h*3/2
-		 * @param bufl - the lower page buffer. Expected to be w*h*3/2
-		 * @param inc - the scroll imcrement. Defaults to 1. 
-		 * @remarks Since memory on the ESP32 is limited, the page buffer is split into an upper and lower area
-		 * to accomodate an scrolling window of about 280*180 (or a bit larger). The buffers needs to be allocated to 
-		 * be each w*h/2*3 (since each pixel is represented by 3 bytes). Additionally, it is important that the dy 
-		 * parameter is divisible by two and that dy/2 is divisible by inc. 
-		 */
-		void window_scroll(int16_t x, int16_t y, int16_t wid, int16_t ht, int16_t dx, int16_t dy, uint8_t *bufh, uint8_t *bufl, uint8_t increment=1);
-
 	private: 
 
 		uint8_t* buf1 = nullptr;

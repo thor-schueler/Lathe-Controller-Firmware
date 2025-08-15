@@ -158,37 +158,7 @@ class DISPLAY_SPI:public DISPLAY_GUI
 		 */
 		void toggle_backlight(boolean state);
 
-		/**
-		 * @brief Scrolls the display vertically
-		 * @param scroll_area_top - the top of the scroll 
-		 * @param scroll_area_height - the height of the scroll area
-		 * @param offset - scroll distance
-		 */
-		void vert_scroll(int16_t scroll_area_top, int16_t scroll_area_height, int16_t offset);
-
 	protected:
-		/**
-		 * @brief Read graphics RAM data as 565 values
-		 * @param x - x Coordinate to start reading from
-		 * @param y - y Coordinate to start reading from
-		 * @param block - Pointer to word array to write the data
-		 * @param w - Width of the area to read
-		 * @param h - height of the area to read
-		 * @returns The number of values read
-		 */
-		uint32_t read_GRAM(int16_t x, int16_t y, uint16_t *block, int16_t w, int16_t h) override;
-
-		/**
-		 * @brief Read graphics RAM data as RGB byte values
-		 * @param x - x Coordinate to start reading from
-		 * @param y - y Coordinate to start reading from
-		 * @param block - Pointer to word array to write the data
-		 * @param w - Width of the area to read
-		 * @param h - height of the area to read
-		 * @returns The number of bytes read
-		 */
-		uint32_t read_GRAM_RGB(int16_t x, int16_t y, uint8_t *block, int16_t w, int16_t h);
-
 		/**
 		 * @brief Read the value from LCD register
 		 * @param reg - the register to read
@@ -223,6 +193,14 @@ class DISPLAY_SPI:public DISPLAY_GUI
 		 * @param data_size - Size of the data block
 		 */
 		void push_command(uint8_t cmd, uint8_t *data, int8_t data_size);
+
+		/**
+		 * @brief   Send Command handles complete sending of commands and data
+		 * @param   commandByte       The Command Byte
+		 * @param   dataBytes         A pointer to the Data bytes to send
+		 * @param   numDataBytes      The number of bytes we should send
+		 */
+		void sendCommand(uint8_t commandByte, const uint8_t *dataBytes = NULL, uint8_t numDataBytes = 0);
 
 		/**
 		 * @brief Performs a write on the SPI bus.
@@ -267,7 +245,8 @@ class DISPLAY_SPI:public DISPLAY_GUI
     	uint16_t rotation;
 		unsigned int width = WIDTH;
 		unsigned int height = HEIGHT;
-		uint16_t XC,YC,CC,RC,SC1,SC2,MD,R24BIT;
+		//uint16_t XC,YC,CC,RC,SC1,SC2,MD,R24BIT;
 		SPIClass *spi = NULL;
+		SPISettings spi_settings;
 };
 #endif

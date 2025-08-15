@@ -133,8 +133,9 @@ class DISPLAY_GUI
 		 * @param y1 - y1 coordinate
 		 * @param x2 - x2 coordinate
 		 * @param y2 - y2 coordinate
+		 * @param color - color to use for the line
 		 */		
-		void draw_line(int16_t x1, int16_t y1, int16_t x2, int16_t y2);
+		void draw_line(int16_t x1, int16_t y1, int16_t x2, int16_t y2, uint16_t color=0x0);
 
 		/** 
 		 * @brief draw a pixel point usingthe current color
@@ -330,14 +331,6 @@ class DISPLAY_GUI
 		 */		
 		void print_string(String st, int16_t x, int16_t y, int16_t xo=0, int16_t yo=0);
 
-		/**
-		 * @brief Read color data for pixel(x,y)
-		 * @param x - X coordinate
-		 * @param y - Y coordinate
-		 * @returns The color value at the coordinate in packed format
-		 */
-		uint16_t read_pixel(int16_t x, int16_t y);
-
 		/** 
 		 * @brief Set 16bits draw color
 		 * @param color - Color to set
@@ -411,17 +404,6 @@ class DISPLAY_GUI
 		 * @param y2 - Lower right y
 		 */
 		virtual void set_addr_window(unsigned int x1, unsigned int y1, unsigned int x2, unsigned int y2)=0;
-
-		/**
-		 * @brief Read graphics RAM data
-		 * @param x - x Coordinate to start reading from
-		 * @param y - y Coordinate to start reading from
-		 * @param block - Pointer to word array to write the data
-		 * @param w - Width of the area to read
-		 * @param h - height of the area to read
-		 * @returns The number of words read
-		 */		
-		virtual uint32_t read_GRAM(int16_t x, int16_t y, uint16_t *block, int16_t w, int16_t h)=0;
 
 		/**
 		 * @brief Print string

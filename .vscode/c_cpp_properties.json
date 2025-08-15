@@ -55,7 +55,9 @@
                 "${env:USERPROFILE}\\AppData\\Local\\Arduino15\\packages\\esp32\\tools\\esp-x32\\*\\xtensa-esp-elf\\include",
 
                 "${env:USERPROFILE}\\onedrive\\documents\\Arduino\\libraries\\**",
-                "${env:USERPROFILE}\\onedrive\\documents\\Arduino\\libraries\\*\\src\\**"
+                "${env:USERPROFILE}\\onedrive\\documents\\Arduino\\libraries\\*\\src\\**",
+                "${env:USERPROFILE}\\onedrive\\documents\\Arduino\\libraries\\*\\examples\\**",
+                "${env:USERPROFILE}\\onedrive\\Documents\\Arduino\\libraries\\Adafruit*"
             ],
             "forcedInclude": [
                 "${env:USERPROFILE}\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.*\\cores\\esp32\\Arduino.h",

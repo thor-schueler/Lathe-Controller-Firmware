@@ -116,8 +116,9 @@ void DISPLAY_GUI::draw_circle(int16_t x, int16_t y, int16_t radius)
  * @param y1 - y1 coordinate
  * @param x2 - x2 coordinate
  * @param y2 - y2 coordinate
+ * @param color - color to use for the line
  */
-void DISPLAY_GUI::draw_line(int16_t x1, int16_t y1, int16_t x2, int16_t y2)
+void DISPLAY_GUI::draw_line(int16_t x1, int16_t y1, int16_t x2, int16_t y2, uint16_t color)
 {
 	int16_t steep = abs(y2 - y1) > abs(x2 - x1);
   	if (steep) 
@@ -151,11 +152,11 @@ void DISPLAY_GUI::draw_line(int16_t x1, int16_t y1, int16_t x2, int16_t y2)
 	{
     	if (steep) 
 		{
-      		draw_pixel(y1, x1);
+      		draw_pixel(y1, x1, color);
     	} 
 		else 
 		{
-      		draw_pixel(x1, y1);
+      		draw_pixel(x1, y1, color);
     	}
     	err -= dy;
     	if (err < 0) 
@@ -694,19 +695,6 @@ void DISPLAY_GUI::print_string(uint8_t *st, int16_t x, int16_t y, int16_t xo, in
 void DISPLAY_GUI::print_string(String st, int16_t x, int16_t y, int16_t xo, int16_t yo)
 {
 	print((uint8_t *)(st.c_str()), x, y, xo, yo);
-}
-
-/**
- * @brief Read color data for pixel(x,y)
- * @param x - X coordinate
- * @param y - Y coordinate
- * @returns The color value at the coordinate in packed format
- */
-uint16_t DISPLAY_GUI::read_pixel(int16_t x, int16_t y)
-{
-	uint16_t colour;
-	read_GRAM(x, y, &colour, 1, 1);
-	return colour;
 }
 
 /** 

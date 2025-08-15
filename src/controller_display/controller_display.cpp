@@ -22,8 +22,8 @@ Controller_Display::Controller_Display() {}
 void Controller_Display::init()
 {
     DISPLAY_SPI::init();
-    draw_background(lcars, lcars_size);
-    //test();
+    //draw_background(lcars, lcars_size);
+    test();
     
     //toggle_backlight(false);
     Logger.Info_f(F("....Free heap: %d"), ESP.getFreeHeap());
@@ -44,102 +44,6 @@ size_t Controller_Display::print(uint8_t *st, int16_t x, int16_t y, int16_t xo, 
   return DISPLAY_GUI::print(st, x, y, xo, yo);
 };
 
-/**
- * @brief Implements scrolling for partial screen, both horizontally and vertically
- * @param x - the top left of the scrolling area x coordinate
- * @param y - the top left of the scrolling area y coordinate
- * @param w - the width of the scroll area
- * @param h - the height of the scorll area
- * @param dx - the ammount to scroll into the x direction
- * @param dy - the ammount to scroll tino the y direction
- * @param bufh - the upper page buffer. Expected to be w*h*3/2
- * @param bufl - the lower page buffer. Expected to be w*h*3/2
- * @param inc - the scroll imcrement. Defaults to 1. 
- * @remarks Since memory on the ESP32 is limited, the page buffer is split into an upper and lower area
- * to accomodate an scrolling window of about 280*180 (or a bit larger). The buffers needs to be allocated to 
- * be each w*h/2*3 (since each pixel is represented by 3 bytes). Additionally, it is important that the dy 
- * parameter is divisible by two and that dy/2 is divisible by inc. 
- */
-void Controller_Display::window_scroll(int16_t x, int16_t y, int16_t w, int16_t h, int16_t dx, int16_t dy, uint8_t *bufh, uint8_t *bufl, uint8_t inc)
-{
-    uint32_t cnth = 0;
-    uint32_t cntl = 0;
-    uint16_t bh = h/2;
-    if (dx) 
-    {
-      // even though the ILI9488 does support vertical scrolling (horizontal in landscape) via hardware
-      // it only scrolls the entire screen height. So we still need to implement software scrolling...
-      // first we read the data....
-      cnth = read_GRAM_RGB(x, y, bufh, w, bh);
-      cntl = read_GRAM_RGB(x, y + bh, bufl, w, bh);
-      
-      // to scroll by 1 pixel to the right, we need to process each row in the read buffer
-      // and move the pixel bytes over by one and then blank our the first pixel....
-      // to affect the scrolling distance dx, we need to iterate until we reach dx...
-      for(uint16_t i=1; i<=dx; i+=inc)
-      {
-        for(uint16_t row=0; row<bh; row++)
-        {
-          uint8_t *rowStarth = &bufh[row*w*3];
-          uint8_t *rowStartl = &bufl[row*w*3];                            // position the pointer at the start of the row.
-          memmove(rowStarth + (i+inc-1)*3, rowStarth + (i-1)*3, (w - (i+inc-1)) * 3); 
-          memmove(rowStartl + (i+inc-1)*3, rowStartl + (i-1)*3, (w - (i+inc-1)) * 3); 
-                                                                          // move the bytes over appropriately
-          for(uint8_t k=1; k<=inc; k++)
-          {                                                                 
-            rowStarth[((i-1)+(k-1))*3]     = 0x0;               // Red component 
-            rowStarth[((i-1)+(k-1))*3 + 1] = 0x0;               // Green component 
-            rowStarth[((i-1)+(k-1))*3 + 2] = 0x0;               // Blue component 
-            rowStartl[((i-1)+(k-1))*3]     = 0x0;               // Red component 
-            rowStartl[((i-1)+(k-1))*3 + 1] = 0x0;               // Green component 
-            rowStartl[((i-1)+(k-1))*3 + 2] = 0x0;               // Blue component 
-                                                                // Set the first pixel to black (0x0, 0x0, 0x0)
-          }
-        }
-        set_addr_window(x, y, x+w-1, y+h-1);                              // Set the scroll region data window
-        CS_ACTIVE;
-        writeCmd8(CC);
-        CD_DATA;
-        spi->transferBytes(bufh, nullptr, cnth);                            // transfer the updated buffer into the window.
-        spi->transferBytes(bufl, nullptr, cntl);
-        CS_IDLE;
-      }
-    }
-    if (dy) 
-    {
-      // if we scroll vertically and rotation is landscape, we need to scroll in software
-      // first we read the data....
-      cnth = read_GRAM_RGB(x, y, bufh, w, bh);
-      cntl = read_GRAM_RGB(x, y + bh, bufl, w, bh);
-      set_addr_window(x, y, x + w-1, y+h-1);
-      CS_ACTIVE;
-      writeCmd8(CC);
-      CD_DATA;
-
-      for(uint16_t i=inc; i<=dy; i+=inc)
-      {
-        if(i<=bh)
-        {
-          spi->transferBytes(bufh + i*3*w, nullptr, cnth-3*i*w);
-          spi->transferBytes(bufl, nullptr, cntl);
-          memset(bufh + 3*(i-inc)*w, 0x0, inc*w*3);
-          spi->transferBytes(bufh, nullptr, 3*i*w);
-                // each dy means we have to move the start over by 3* the with of the area
-                // conversely, the size to transfer reduces by dy*3*width
-                // but now the last row needs to be blanked....
-        }
-        else
-        {
-          // now bufh has been fully processes and we need to shif processing to bufl
-          spi->transferBytes(bufl + (i-bh)*3*w, nullptr, cntl-3*(i-bh)*w);
-          spi->transferBytes(bufh, nullptr, cnth);
-          memset(bufl + 3*(i-bh-inc)*w, 0x0, inc*w*3);
-          spi->transferBytes(bufl, nullptr, 3*(i-bh)*w);
-        }
-      }
-      CS_IDLE;
-    }
-}
 
 /**
  * @brief Tests the display by going through a routine of drawing various
@@ -147,11 +51,15 @@ void Controller_Display::window_scroll(int16_t x, int16_t y, int16_t w, int16_t 
  */
 void Controller_Display::test()
 { 
-  draw_background(lcars, lcars_size);
+  //draw_background(lcars, lcars_size);
+  Logger.Info(F("Testing display..."));
   fill_rect(0, 0, this->width, this->height, 0xf800); vTaskDelay(500);
   fill_rect(0, 0, this->width, this->height, 0x07E0); vTaskDelay(500);
   fill_rect(0, 0, this->width, this->height, 0x001F); vTaskDelay(500);
   fill_rect(0, 0, this->width, this->height, 0x0);
+  Logger.Info(F("Testing display... done."));
+  return;
+
   for(int i=0; i<50; i++)
   {
     set_draw_color(random(65535));

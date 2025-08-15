@@ -23,29 +23,27 @@ static const uint8_t display_buffer[WIDTH * HEIGHT * 3] PROGMEM = {0};
  */
 DISPLAY_SPI::DISPLAY_SPI()
 {
-	pinMode(CS, OUTPUT);	  // Enable outputs
-	pinMode(RS, OUTPUT);
-	if(RESET > 0) pinMode(RESET, OUTPUT);
-	if(LED > 0)
-	{
-		pinMode(LED, OUTPUT);
-		digitalWrite(LED, LOW);
-	}
+	//if(RESET > 0) pinMode(RESET, OUTPUT);
+	//if(LED > 0)
+	//{
+	//	pinMode(LED, OUTPUT);
+	//		digitalWrite(LED, LOW);
+	//}
 
-	spi = new SPIClass(HSPI);
-	spi->begin(SCK, -1, MOSI, CS);
+	//spi = new SPIClass(HSPI);
+	//spi->setFrequency(20000000);
+	//spi->setBitOrder(MSBFIRST);
+	//spi->setDataMode(SPI_MODE0);
+	//spi->begin(SCK, -1, SID, CS);
 		// explicitely pass the PINs since we need to avoid the assignment of the MISO pin as 
 		// this pin is required elsewhere. 
-	spi->setFrequency(20000000);
-	spi->setBitOrder(MSBFIRST);
-	spi->setDataMode(SPI_MODE0);
 
-	pinMode(RS, OUTPUT);
-	rotation = 0;
-	width = WIDTH;
-	height = HEIGHT;
-	setWriteDir();
-	CS_IDLE;
+	//pinMode(RS, OUTPUT);
+	//rotation = 0;
+	//width = WIDTH;
+	//height = HEIGHT;
+	//setWriteDir();
+	//CS_IDLE;
 }
 
 #pragma region public methods
@@ -70,7 +68,7 @@ void DISPLAY_SPI::draw_background(const unsigned char* image, size_t size)
 {
 	set_addr_window(0, 0, width - 1, height);
 	CS_ACTIVE;
-	writeCmd8(CC);
+	writeCmd8(ILI9341_MEMORYWRITE);
 	CD_DATA;
 	spi->transferBytes(image, nullptr, size);
 	CS_IDLE;
@@ -130,7 +128,7 @@ void DISPLAY_SPI::draw_image(const unsigned char* image, size_t size, uint16_t x
 {
 	set_addr_window(x, y, x+ w - 1, y + h);
 	CS_ACTIVE;
-	writeCmd8(CC);
+	writeCmd8(ILI9341_MEMORYWRITE);
 	CD_DATA;
 	spi->transferBytes(image, nullptr, size);
 	CS_IDLE;
@@ -148,9 +146,9 @@ void DISPLAY_SPI::draw_pixel(int16_t x, int16_t y, uint16_t color)
 	{
 		return;
 	}
-	set_addr_window(x, y, x, y);
+	set_addr_window(x, y, 1, 1);
 	CS_ACTIVE;
-	writeCmd8(CC);
+	writeCmd8(ILI9341_MEMORYWRITE);
 	writeData16(color);
 	CS_IDLE;
 }
@@ -198,41 +196,28 @@ void DISPLAY_SPI::fill_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t
 		end = get_height();
 	}
 	h = end - y;
-	if(true)
+
+	buffer = new uint8_t[(size_t)(h*2)];
+	uint8_t u = (uint8_t)((color >> 8) & 0xFF);
+	uint8_t l = (uint8_t)(color & 0xFF);
+	for(i=0; i<h*2; i+=2) 
 	{
-		buffer = new uint8_t[(size_t)(h*3)];
-		uint8_t r = (uint8_t)((((color >> 11) & 0x1F) * 63)/31);
-		uint8_t g = (uint8_t)((color >> 5) & 0x3F);
-		uint8_t b = (uint8_t)(((color & 0x1F) * 63) / 31);
-		for(i=0; i<h*3; i+=3) 
-		{
-			buffer[i] = r << 2;
-			buffer[i+1] = g << 2;
-			buffer[i+2] = b << 2;
-		}
-		set_addr_window(x, y, x + w - 1, y + h);
-			// reducing w by one when setting the address window is important. 
-			// the frame memory is written x,y x+1,y, ..., x+w-1,y, x,y+1, ... 
-			// so if we do not reduce by 1, we have an extra line.... 
-		CS_ACTIVE;
-		writeCmd8(CC);
-		CD_DATA;
-		for (i=0; i<w; i++)
-		{
-			spi->transferBytes(buffer, nullptr, h*3);
-		} 
-		CS_IDLE;
-		delete[] buffer;
+		buffer[i] = u;
+		buffer[i+1] = l;
 	}
-	else
+	set_addr_window(x, y, x + w - 1, y + h);
+		// reducing w by one when setting the address window is important. 
+		// the frame memory is written x,y x+1,y, ..., x+w-1,y, x,y+1, ... 
+		// so if we do not reduce by 1, we have an extra line.... 
+	CS_ACTIVE;
+	writeCmd8(ILI9341_MEMORYWRITE);
+	CD_DATA;
+	for (i=0; i<w; i++)
 	{
-		set_addr_window(x, y, x + w - 1, y + h);
-		CS_ACTIVE;
-		writeCmd8(CC);
-		CD_DATA;
-		spi->transferBytes(display_buffer, nullptr, WIDTH * HEIGHT * 3);
-		CS_IDLE;
-	}
+		spi->transferBytes(buffer, nullptr, h*2);
+	} 
+	CS_IDLE;
+	delete[] buffer;
 }
 
 /**
@@ -271,9 +256,29 @@ int16_t DISPLAY_SPI::get_width() const
  */
 void DISPLAY_SPI::init()
 {
+	pinMode(RS, OUTPUT);
+	pinMode(CS, OUTPUT);
+	CS_IDLE;
+	CD_DATA;
+	
+	spi_settings = SPISettings(20000000, MSBFIRST, SPI_MODE0);
+  	spi = new SPIClass(HSPI);
+  	spi->begin(SCK, -1, SID, CS);
+		// explicitely pass the PINs since we need to avoid the assignment of the MISO pin as 
+		// this pin is required elsewhere.
+	if(RESET > 0) pinMode(RESET, OUTPUT);
+	if(LED > 0)
+	{
+		pinMode(LED, OUTPUT);
+		digitalWrite(LED, LOW);
+	}
 	reset();
-	toggle_backlight(true);
 	start_display();
+
+	rotation = 0;
+	width = WIDTH;
+	height = HEIGHT;
+	toggle_backlight(true);
 }
 
 /**
@@ -302,7 +307,7 @@ void DISPLAY_SPI::push_color_table(uint16_t * block, int16_t n, bool first, uint
 	CS_ACTIVE;
 	if (first) 
 	{  
-		writeCmd8(CC);		
+		writeCmd8(ILI9341_MEMORYWRITE);		
 	}
 	while (n-- > 0) 
 	{
@@ -336,7 +341,7 @@ void DISPLAY_SPI::push_color_table(uint8_t * block, int16_t n, bool first, uint8
 	CS_ACTIVE;
 	if (first) 
 	{
-		writeCmd8(CC);		
+		writeCmd8(ILI9341_MEMORYWRITE);		
 	}
 	while (n-- > 0) 
 	{
@@ -362,10 +367,6 @@ void DISPLAY_SPI::push_color_table(uint8_t * block, int16_t n, bool first, uint8
  */
 void DISPLAY_SPI::reset()
 {
-	CS_IDLE;
-	RD_IDLE;
-	WR_IDLE;
-
 	if(RESET > 0)
 	{
 		digitalWrite(RESET, LOW);
@@ -373,17 +374,11 @@ void DISPLAY_SPI::reset()
 		digitalWrite(RESET, HIGH);
 		delay(120);
 
-		CS_ACTIVE;
-		CD_COMMAND;
-		write8(ILI9341_NOP);
-		CS_IDLE;
+		sendCommand(ILI9341_NOP);
 	}
 	else
 	{
-		CS_ACTIVE;
-		CD_COMMAND;
-		write8(ILI9341_SOFTRESET);
-		CS_IDLE;
+		sendCommand(ILI9341_SOFTRESET);
 		delay(120);
 	}
 }
@@ -422,7 +417,6 @@ void DISPLAY_SPI::set_rotation(uint8_t r)
 	}
 	writeCmdData8(ILI9341_MEMORYACCESS, val);
 	set_addr_window(0, 0, width - 1, height - 1);
-	vert_scroll(0, HEIGHT, 0);
 	CS_IDLE;
 }
 
@@ -444,165 +438,9 @@ void DISPLAY_SPI::toggle_backlight(boolean state)
 		}
 	}
 }
-
-/**
- * @brief Scrolls the display vertically
- * @param scroll_area_top - the top of the scroll 
- * @param scroll_area_height - the height of the scroll area
- * @param offset - scroll distance
- */
-void DISPLAY_SPI::vert_scroll(int16_t scroll_area_top, int16_t scroll_area_height, int16_t offset)
-{
-	int16_t bfa;
-	int16_t vsp;
-	bfa = HEIGHT - scroll_area_top - scroll_area_height; 
-	if (offset <= -scroll_area_height || offset >= scroll_area_height)
-	{
-		offset = 0; //valid scroll
-	}
-	vsp = scroll_area_top + offset; // vertical start position
-	if (offset < 0)
-	{
-		vsp += scroll_area_height;  //keep in unsigned range
-	}
-	uint8_t d[6];           		// for multi-byte parameters
-	d[0] = scroll_area_top >> 8;    // TFA (top fixed area)
-	d[1] = scroll_area_top;
-	d[2] = scroll_area_height >> 8; // VSA (scroll area)
-	d[3] = scroll_area_height;
-	d[4] = bfa >> 8;        		// BFA (bottom fixes area)
-	d[5] = bfa;
-	push_command(SC1, d, 6);		// Send the command setting the scroll window
-
-	d[0] = vsp >> 8;        		// Set the scroll start address at the top of the scroll area
-	d[1] = vsp;						// Ending line parameter for the scroll
-	push_command(SC2, d, 2);		// Vertical Scroll Start Address command
-
-	if (offset == 0) 
-	{
-		push_command(0x13, NULL, 0);
-	}
-}
-
 #pragma endregion
 
 #pragma region protected methods
-/**
- * @brief Read graphics RAM data
- * @param x - x Coordinate to start reading from
- * @param y - y Coordinate to start reading from
- * @param block - Pointer to word array to write the data
- * @param w - Width of the area to read
- * @param h - height of the area to read
- * @returns The number of words read
- */
-uint32_t DISPLAY_SPI::read_GRAM(int16_t x, int16_t y, uint16_t *block, int16_t w, int16_t h)
-{
-	uint16_t ret, dummy;
-	uint32_t n = w * h;
-	uint32_t cnt = 0;
-	uint8_t r, g, b, tmp;
-	set_addr_window(x, y, x + w - 1, y + h - 1);
-	while (n > 0) 
-	{
-		CS_ACTIVE;
-		writeCmd16(RC);
-		setReadDir();
-
-		read8(r);
-		while (n) 
-		{
-			if(R24BIT == 1)
-			{
-        		read8(r);
-         		read8(g);
-        		read8(b);
-            	ret = RGB_to_565(r, g, b);
-			}
-			else if(R24BIT == 0)
-			{
-				read16(ret);
-			}
-			*block++ = ret;
-			n--;
-			cnt++;
-		}
-		CS_IDLE;
-		setWriteDir();
-	}
-	return cnt;
-}
-
-/**
- * @brief Read graphics RAM data as 565 values
- * @param x - x Coordinate to start reading from
- * @param y - y Coordinate to start reading from
- * @param block - Pointer to word array to write the data
- * @param w - Width of the area to read
- * @param h - height of the area to read
- * @returns The number of values read
- */
-uint32_t DISPLAY_SPI::read_GRAM_RGB(int16_t x, int16_t y, uint8_t *block, int16_t w, int16_t h)
-{
-	uint32_t ret;
-	uint32_t n = (uint32_t)w * (uint32_t)h * 3;
-	uint32_t cnt = 0;
-	uint8_t r;
-
-	set_addr_window(x, y, x+w-1, y+h-1);
-	CS_ACTIVE;
-	writeCmd16(0x2E);
-	setReadDir();
-
-	r=spi->transfer(0x00);  // first byte just contains some status info... discard...
-	if(R24BIT == 1)
-	{
-		for (uint32_t i = 0; i < n; i++) 
-		{ 
-			block[i] = (spi->transfer(0x00) & 0x7F) << 1;
-			cnt++;
-		}
-	}
-	else
-	{
-		for (uint32_t i = 0; i < n; i+=3) 
-		{ 
-			block[i] = (uint8_t)((((ret >> 11) & 0x1F) * 63)/31);
-			block[i+1] = (uint8_t)((ret >> 5) & 0x3F);
-			block[i+2] = (uint8_t)(((ret & 0x1F) * 63) / 31);
-				// this is likely incorrect and needs to be empircally reviewed
-				// to make sure that there is no internal mucking up the colors ;)
-			cnt+=3;
-		}
-	}
-	CS_IDLE;
-	setWriteDir();
-	return cnt;
-}
-
-
-/**
- * @brief Read the value from LCD register
- * @param reg - the register to read
- * @param index - the number of words to read
- */
-uint16_t DISPLAY_SPI::read_reg(uint16_t reg, int8_t index)
-{
-	uint16_t ret,high;
-	uint8_t low;
-	CS_ACTIVE;
-	writeCmd16(reg);
-	setReadDir();
-	delay(1); 
-	do 
-	{ 
-		read16(ret);
-	} while (--index >= 0);  
-	CS_IDLE;
-	setWriteDir();
-	return ret;
-}
-
 /**
  * @brief Sets the LCD address window 
  * @param x1 - Upper left x
@@ -615,13 +453,13 @@ void DISPLAY_SPI::set_addr_window(unsigned int x1, unsigned int y1, unsigned int
 	CS_ACTIVE;
 	uint8_t x_buf[] = {x1>>8,x1,x2>>8,x2};
 	uint8_t y_buf[] = {y1>>8,y1,y2>>8,y2};
-	push_command(XC, x_buf, 4);
+	push_command(ILI9341_COLADDRSET, x_buf, 4);
 		// Send Column Address Set Command 
 		// This command is used to define the area of the frame memory that the MCU can access. This command makes no change on 
 		// the other driver status. The values of SC [15:0] (first and second data bytes) and EC [15:0] (third and fourth data bytes) 
 		// are referred when RAMWR command is applied. Each value 
 		// represents one column line in the Frame Memory.
-	push_command(YC, y_buf, 4);
+	push_command(ILI9341_PAGEADDRSET, y_buf, 4);
 		// Send Page Address Set Command
 		// This command is used to define the area of the frame memory that the MCU can access. This command makes no change on 
 		// the other driver status. The values of SP [15:0] (first and second data bytes) and EP [15:0] (third and fourth data bytes) 
@@ -707,18 +545,23 @@ void DISPLAY_SPI::start_display()
 		0x00                                   					// End of list
     };
 
-    XC = ILI9341_COLADDRSET;
-    YC = ILI9341_PAGEADDRSET;
-    CC = ILI9341_MEMORYWRITE;
-    RC = ILI9341_RAMRD;
-    SC1 = 0x33;
-    SC2 = 0x37;
-    MD = ILI9341_MEMORYACCESS;
-    R24BIT = 0; // ILI9341 uses 16-bit color
+  	uint8_t cmd, x, numArgs;
+  	const uint8_t *addr = ILI9341_regValues;
+	while ((cmd = pgm_read_byte(addr++)) > 0) 
+	{
+    	x = pgm_read_byte(addr++);
+    	numArgs = x & 0x7F;
+		if(x==TFTLCD_DELAY8) delay(numArgs);
+		else
+		{
+    		sendCommand(cmd, addr, numArgs);
+    		addr += numArgs;
+		}
+  	}
 
-	init_table8(ILI9341_regValues, sizeof(ILI9341_regValues));
-	set_rotation(rotation); 
-	invert_display(false);
+	//init_table8(ILI9341_regValues, sizeof(ILI9341_regValues));
+	//set_rotation(rotation); 
+	//invert_display(false);
 	Logger.Info(F("....ILI9341 display startup done."));
 }
 
@@ -732,9 +575,9 @@ void DISPLAY_SPI::write_display_buffer()
 	CS_ACTIVE;
 	for(i=0; i<HEIGHT; i++)  
 	{  
-		writeCmd8(YC+i);    
+		writeCmd8(ILI9341_PAGEADDRSET+i);    
 		writeCmd8(0x02); 
-		writeCmd8(XC); 
+		writeCmd8(ILI9341_COLADDRSET); 
 		for(n=0; n<WIDTH; n++)
 		{
 			writeData8(display_buffer[i*WIDTH+n]); 
@@ -792,6 +635,23 @@ void DISPLAY_SPI::push_command(uint8_t cmd, uint8_t *data, int8_t data_size)
 		writeData8(u8); 
 	}
 	CS_IDLE;
+}
+
+/** 
+ * @brief   Send Command handles complete sending of commands and data
+ * @param   commandByte       The Command Byte
+ * @param   dataBytes         A pointer to the Data bytes to send
+ * @param   numDataBytes      The number of bytes we should send
+ */
+void DISPLAY_SPI::sendCommand(uint8_t commandByte, const uint8_t *dataBytes, uint8_t numDataBytes) {
+  CS_ACTIVE;
+  CD_COMMAND;
+  spi_write(commandByte); // Send the command byte
+
+  CD_DATA;
+  for (int i = 0; i < numDataBytes; i++) spi_write(pgm_read_byte(dataBytes++));
+
+  CS_IDLE;
 }
 
 /**
