@@ -26,13 +26,18 @@ SerialLogger::SerialLogger()
  * @brief Logs an information message to the serial console. 
  * 
  * @param message The message to log
+ * @param newline True to terminate with a newline.
  */
-void SerialLogger::Info(String message)
+void SerialLogger::Info(String message, bool newline)
 {
-  Serial.print("; ");
-  this->writeTime();
-  Serial.print(F(" [INFO] "));
-  Serial.println(message);
+  if(newline)
+  { 
+    Serial.print("; ");
+    this->writeTime();
+    Serial.print(F(" [INFO] "));
+    Serial.println(message);
+  }
+  else Serial.print(message);
 }
 
 /**

@@ -109,20 +109,15 @@ class Controller_Display:public DISPLAY_SPI
 		void init();
 
 		/**
-		 * @brief Print string
-		 * @param st - the string to print
-		 * @param x - the x coordinate
-		 * @param y - the y coordinate
-		 * @param xo - x origin of the print area
-		 * @param yo - y origin of the print area
-		 */
-		size_t print(uint8_t *st, int16_t x, int16_t y, int16_t xo=0, int16_t yo=0) override;
-
-		/**
 		 * @brief Tests the display by going through a routine of drawing various
 		 * shapes and information
 		 */
 		void test();
+
+		/**
+		 * @brief Draws the standard background.
+		 */
+		void update_background();
 
 		/**
 		 * @brief Updates the back light state icon.

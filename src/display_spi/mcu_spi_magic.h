@@ -27,8 +27,8 @@
 #define SID   13
 #define SCK   14
 
-#define WIDTH 240
-#define HEIGHT 320
+#define TFT_WIDTH 240
+#define TFT_HEIGHT 320
 
 #define CD_COMMAND  (digitalWrite(RS,LOW))    
 #define CD_DATA     (digitalWrite(RS,HIGH)) 
@@ -40,12 +40,12 @@
 #define CLK_LOW     (digitalWrite(SCK,LOW)) 
 #define CLK_HIGH    (digitalWrite(SCK,HIGH)) 
 
-#define write16(d) write8(d>>8); write8(d)
-#define read16(dst) { uint8_t hi; read8(hi); read8(dst); dst |= (hi << 8); }
+#define write_16(d) write8(d>>8); write8(d)
+#define read_16(dst) { uint8_t hi; read8(hi); read8(dst); dst |= (hi << 8); }
 #define writeCmd8(x) CD_COMMAND; write8(x)
 #define writeData8(x)  CD_DATA; write8(x) 
-#define writeCmd16(x)  CD_COMMAND; write16(x)
-#define writeData16(x)  CD_DATA; write16(x)
+#define writeCmd16(x)  CD_COMMAND; write_16(x)
+#define writeData16(x)  CD_DATA; write_16(x)
 #define writeData18(x)  CD_DATA; write8((x>>8)&0xF8); write8((x>>3)&0xFC); write8(x<<3)
 #define writeCmdData8(a, d) CD_COMMAND; write8(a); CD_DATA; write8(d)
 #define writeCmdData16(a, d)  CD_COMMAND; write8(a>>8); write8(a); CD_DATA; write8(d>>8); write8(d)

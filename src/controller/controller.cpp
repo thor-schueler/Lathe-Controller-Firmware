@@ -42,8 +42,8 @@ Controller::Controller()
     Logger.Info(F("Startup"));
     Logger.Info(F("....Initialize Display"));
     _display = new Controller_Display();
-    _display->set_rotation(1);
     _display->init();
+    //_display->set_rotation(1);
     _instance = this;
 
     Logger.Info(F("....Inititialize GPIO pins"));
@@ -115,7 +115,7 @@ Controller::Controller()
     _display_mutex = xSemaphoreCreateBinary();  xSemaphoreGive(_display_mutex);
 
     Logger.Info("....Create various tasks");
-    //xTaskCreatePinnedToCore(display_runner, "displayRunner", 8192, this, 1, &_display_runner, 0);
+    xTaskCreatePinnedToCore(display_runner, "displayRunner", 8192, this, 1, &_display_runner, 0);
     xTaskCreatePinnedToCore(input_runner, "inputRunner", 2048, this, configMAX_PRIORITIES-1, &_input_runner, 0);
     xTaskCreatePinnedToCore(rpm_runner, "rpmRunner", 2048, this, configMAX_PRIORITIES-1, &_rpm_runner, 0);
 
@@ -169,6 +169,11 @@ Controller::~Controller()
  */
 void Controller::display_runner(void* args)
 {
+    bool old_power = false;
+    bool old_engine = false;
+    bool had_emergency = false;
+    bool is_first = true;
+    unsigned int old_rpm = 0;
     Controller *_this = reinterpret_cast<Controller *>(args);
     for (;;) 
     { 
@@ -178,20 +183,35 @@ void Controller::display_runner(void* args)
             {
                 // draw emergency shutdown screen
                 _this->_display->write_emergency();
+                had_emergency = true;
             }
             else
             {
-                // draw background
-                _this->_display->draw_background(lcars, lcars_size);
+                if(had_emergency || is_first)
+                {
+                    //restore display background after emergency
+                    _this->_display->update_background();
+                    had_emergency = false;
+                }
 
-                // write RPMs to display
-                _this->_display->write_rpm(_this->_rpm);
+                if(_this->_rpm != old_rpm)
+                {
+                    // write RPMs to display
+                    _this->_display->write_rpm(_this->_rpm);
+                    old_rpm = _this->_rpm;
+                }
 
-                // update engine energized state
-                _this->_display->update_engine_state(_this->_is_energized);
+                if(old_power != _this->_main_power || old_engine != _this->_is_energized || is_first)
+                {
+                    // update engine energized state
+                    _this->_display->update_engine_state(_this->_is_energized);
 
-                // update power state
-                _this->_display->update_power_state(_this->_main_power);
+                    // update power state
+                    _this->_display->update_power_state(_this->_main_power);
+                
+                    old_power = _this->_main_power;
+                    old_engine = _this->_is_energized;
+                }
 
                 // update FOR state
                 _this->_display->update_for_state(_this->_for_f, _this->_for_b);
@@ -207,7 +227,8 @@ void Controller::display_runner(void* args)
             }
             xSemaphoreGive(_this->_display_mutex);
         }
-        vTaskDelay(10);
+        is_first = false;
+        vTaskDelay(100);
     }
 }
 
@@ -362,6 +383,7 @@ void Controller::rpm_runner(void* args)
     { 
         _this->calculate_rpm();
         vTaskDelay(pdMS_TO_TICKS(RPM_CALCULATION_INTERVAL));
+        _this->_rpm = random(2500);
     }
 }
 

@@ -29,8 +29,9 @@ public:
    * @brief Logs an information message to the serial console. 
    * 
    * @param message The message to log
+   * @param newline True to terminate with a newline.
    */
-  void Info(String message);
+  void Info(String message, bool newline=true);
 
   /**
    * @brief Logs a formatted message to the serial console. Follows print_f conventions.

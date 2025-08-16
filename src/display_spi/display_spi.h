@@ -9,6 +9,9 @@
 #include "mcu_spi_magic.h"
 #include "../display_gui/display_gui.h"
 
+//#include "Adafruit_GFX.h"
+//#include "Adafruit_ILI9341.h"
+
 /** 
  * This program implements the SPI display for the wheel.
  * if you don't need to control the LED pin,you can set it to 3.3V and set the pin definition to -1.
@@ -21,7 +24,7 @@
 /**
  * @brief Implements the communication with the SPI controller
  */
-class DISPLAY_SPI:public DISPLAY_GUI
+class DISPLAY_SPI
 {
 	public:
 		/**
@@ -37,14 +40,14 @@ class DISPLAY_SPI:public DISPLAY_GUI
 		 * @param b - Blue color value
 		 * @returns 16-bit packed color value
 		 */
-		uint16_t RGB_to_565(uint8_t r, uint8_t g, uint8_t b) override;
+		uint16_t RGB_to_565(uint8_t r, uint8_t g, uint8_t b);
 
 		/**
 		 * @brief draw backgound image on the display
 		 * @param image - array to image containing 565 color values per pixel
 		 * @param size - the number of elements in the image (should be wxhx3)
 		 */
-		void draw_background(const unsigned char* image, size_t size) override;
+		void draw_background(const unsigned char* image, size_t size);
 
 		/**
 		 * @brief Draws a bitmap on the display
@@ -66,7 +69,7 @@ class DISPLAY_SPI:public DISPLAY_GUI
 		 * @param w - image width
 		 * @param h - image height
 		 */
-		void draw_image(const unsigned char* image, size_t size, uint16_t x, uint16_t y, uint16_t w, uint16_t h) override;
+		void draw_image(const unsigned char* image, size_t size, uint16_t x, uint16_t y, uint16_t w, uint16_t h);
 
 		/**
 		 * @brief Draws a pixel of a certain color at a certain location
@@ -74,7 +77,11 @@ class DISPLAY_SPI:public DISPLAY_GUI
 		 * @param y - y coordinate of the pixel
 		 * @param color - the color of the pixel to set
 		 */
-		void draw_pixel(int16_t x, int16_t y, uint16_t color) override;
+		void draw_pixel(int16_t x, int16_t y, uint16_t color);
+
+		void drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color); 
+		void drawFastVLine(int16_t x, int16_t y, int16_t w, uint16_t color); 
+		void drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t color); 
 
 		/**
 		 * @brief Fill area from x to x+w, y to y+h
@@ -84,13 +91,15 @@ class DISPLAY_SPI:public DISPLAY_GUI
 		 * @param h - height
 		 * @param color - color
 		 */
-		void fill_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) override;
+		void fill_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
+
+		void fillScreen(uint16_t color); 
 
 		/**
 		 * @brief Gets teh display height
 		 * @returns The display height
 		 */
-		int16_t get_height(void) const override;
+		int16_t get_height(void) const;
 
 		/**
 		 * @brief Gets the current display rotation
@@ -106,7 +115,7 @@ class DISPLAY_SPI:public DISPLAY_GUI
 		 * @brief Gets the display width
 		 * @returns The display width
 		 */
-		int16_t get_width(void) const override;
+		int16_t get_width(void) const;
 
 		/**
 		 * @brief Initializes the display
@@ -118,24 +127,6 @@ class DISPLAY_SPI:public DISPLAY_GUI
 		 * @param invert - True to invert, false to revert inversion
 		 */
 		void invert_display(boolean i);
-
-		/**
-		 * @brief Push color table for 16 bits to controller
-		 * @param block - the color table
-		 * @param n - the number of colors in the table
-		 * @param first - true to first send an initialization command
-		 * @param flags - flags
-		 */
-		void push_color_table(uint16_t * block, int16_t n, bool first, uint8_t flags) override;
-
-		/**
-		 * @brief Push color table for 8 bits to controller
-		 * @param block - the color table
-		 * @param n - the number of colors in the table
-		 * @param first - true to first send an initialization command
-		 * @param flags - flags
-		 */	
-		void push_color_table(uint8_t * block, int16_t n, bool first, uint8_t flags);
 
 		/**
 		* @brief Reset the display
@@ -173,26 +164,7 @@ class DISPLAY_SPI:public DISPLAY_GUI
 		 * @param x2 - Lower right x
 		 * @param y2 - Lower right y
 		 */
-		void set_addr_window(unsigned int x1, unsigned int y1, unsigned int x2, unsigned int y2) override;
-
-		/**
-		 * @brief Starts the display, initializes registers
-		 */
-		void start_display();
-
-		/**
-		 * @brief Writes the display buffer contents to the display
-		 * @remarks The display buffer is stored in the static display_buffer array
-		 */
-		void write_display_buffer();
-
-		/**
-		 * @brief Writes command and data block to the display controller
-		 * @param cmd - The command to write
-		 * @param data - The block of data to write
-		 * @param data_size - Size of the data block
-		 */
-		void push_command(uint8_t cmd, uint8_t *data, int8_t data_size);
+		void set_addr_window(unsigned int x1, unsigned int y1, unsigned int x2, unsigned int y2) ;
 
 		/**
 		 * @brief   Send Command handles complete sending of commands and data
@@ -202,51 +174,145 @@ class DISPLAY_SPI:public DISPLAY_GUI
 		 */
 		void sendCommand(uint8_t commandByte, const uint8_t *dataBytes = NULL, uint8_t numDataBytes = 0);
 
-		/**
-		 * @brief Performs a write on the SPI bus.
-		 * @param data - data to write
-		 */
-		void spi_write(uint8_t data);
-		
-		/**
-		 * @brief Read data from the SPI bus
-		 * @return the data read from the bus
-		 */
-		uint8_t spi_read();
-		
-		/**
-		 * @brief Writes a command to the display controller.
-		 * @param cmd - Command to write
-		 */
-		void write_cmd(uint16_t cmd);
+		inline void SPI_BEGIN_TRANSACTION(void) { spi->beginTransaction(spi_settings); };
+		inline void SPI_END_TRANSACTION(void) { spi->endTransaction(); };
+		inline void SPI_CS_LOW(void) { digitalWrite(CS, LOW); };
+		inline void SPI_CS_HIGH(void) { digitalWrite(CS, HIGH); };
+		inline void SPI_DC_LOW(void) { digitalWrite(RS, LOW); };
+		inline void SPI_DC_HIGH(void) { digitalWrite(RS, HIGH); };
+		inline void spiWrite(uint8_t b) {spi->write(b); };
+		inline void SPI_WRITE16(uint16_t u) {spi->write16(u); };
+		inline void startWrite(void) { SPI_BEGIN_TRANSACTION(); SPI_CS_LOW(); };
+		inline void endWrite(void) { SPI_CS_HIGH(); SPI_END_TRANSACTION(); };
 
-		/**
-		 * @brief Writes data to the display controller.
-		 * @param data - Data to write
-		 */		
-		void write_data(uint16_t data);
-
-		/**
-		 * @brief Writes command and data combination to the display controller.
-		 * @param cmd - Command to write
-		 * @param data - Data to write
-		 */
-		void write_cmd_data(uint16_t cmd, uint16_t data);
-
-		/**
-		 * @brief Pushes initialization data and commands to the display controller
-		 * @details This method uses byte data. The first byte is a command, the second the number of parameters, followed by all the parameters, then next command etc.....
-		 * @param table - Pointer to table of byte data
-		 * @param size - The number of bytes in the table 
-		 */
-		void init_table8(const void *table, int16_t size);
-		
+		void writeCommand(uint8_t cmd);
 
     	uint16_t rotation;
-		unsigned int width = WIDTH;
-		unsigned int height = HEIGHT;
-		//uint16_t XC,YC,CC,RC,SC1,SC2,MD,R24BIT;
+		unsigned int width = TFT_WIDTH;
+		unsigned int height = TFT_HEIGHT;
 		SPIClass *spi = NULL;
 		SPISettings spi_settings;
 };
+
+// class DISPLAY_SPI_X
+// {
+// 	public:
+// 		/**
+// 		 * @brief Generates a new instance of the DISPLAY_SPI class. 
+// 		 * @details initializes the SPI and LCD pins including CS, RS, RESET 
+// 		 */
+// 		DISPLAY_SPI_X();
+
+// 		/**
+// 		 * @brief Draws a pixel of a certain color at a certain location
+// 		 * @param x - x coordinate of the pixel
+// 		 * @param y - y coordinate of the pixel
+// 		 * @param color - the color of the pixel to set
+// 		 */
+// 		void draw_pixel(int16_t x, int16_t y, uint16_t color);
+
+// 		void drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color); 
+// 		void drawFastVLine(int16_t x, int16_t y, int16_t w, uint16_t color); 
+// 		void drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t color); 
+
+// 		/**
+// 		 * @brief Fill area from x to x+w, y to y+h
+// 		 * @param x - x Coordinate
+// 		 * @param y - y Coordinate
+// 		 * @param w - width
+// 		 * @param h - height
+// 		 * @param color - color
+// 		 */
+// 		void fill_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
+
+// 		void fillScreen(uint16_t color);
+
+// 		/**
+// 		 * @brief Gets teh display height
+// 		 * @returns The display height
+// 		 */
+// 		int16_t get_height(void) const;
+
+// 		/**
+// 		 * @brief Gets the current display rotation
+// 		 * @returns the rotation: 
+// 		 * 		0  :  0 degree 
+// 		 *		1  :  90 degree
+// 		*		2  :  180 degree
+// 		*		3  :  270 degree
+// 		*/	
+// 		uint8_t get_rotation(void) const;
+
+// 		/**
+// 		 * @brief Gets the display width
+// 		 * @returns The display width
+// 		 */
+// 		int16_t get_width(void) const;
+
+// 		/**
+// 		 * @brief Initializes the display
+// 		 */
+// 		void init();
+
+// 		/**
+// 		* @brief Reset the display
+// 		*/
+// 		void reset();
+
+// 		/**
+// 		 * @brief Set display rotation
+// 		 * @param rotation - The Rotation to set. 
+// 		 * 					 0 - 0 degree
+// 		 * 					 1 - 90 degree
+// 		 * 					 2 - 180 degree
+// 		 * 					 3 - 270 degree
+// 		 */
+// 		void set_rotation(uint8_t r); 
+
+// 		/**
+// 		 * @brief Toggles the backlight on or off if an LED Pin is connected
+// 		 * @param state - true to turn the backlight on, false to turn it off. 
+// 		 */
+// 		void toggle_backlight(boolean state);
+
+
+// 	protected:
+
+// 		/**
+// 		 * @brief Sets the LCD address window 
+// 		 * @param x1 - Upper left x
+// 		 * @param y1 - Upper left y
+// 		 * @param x2 - Lower right x
+// 		 * @param y2 - Lower right y
+// 		 */
+// 		void set_addr_window(unsigned int x1, unsigned int y1, unsigned int x2, unsigned int y2);
+
+// 		/**
+// 		 * @brief   Send Command handles complete sending of commands and data
+// 		 * @param   commandByte       The Command Byte
+// 		 * @param   dataBytes         A pointer to the Data bytes to send
+// 		 * @param   numDataBytes      The number of bytes we should send
+// 		 */
+// 		void sendCommand(uint8_t commandByte, const uint8_t *dataBytes = NULL, uint8_t numDataBytes = 0);
+
+// 		inline void SPI_BEGIN_TRANSACTION(void) { spi->beginTransaction(spi_settings); };
+// 		inline void SPI_END_TRANSACTION(void) { spi->endTransaction(); };
+// 		inline void SPI_CS_LOW(void) { digitalWrite(CS, LOW); };
+// 		inline void SPI_CS_HIGH(void) { digitalWrite(CS, HIGH); };
+// 		inline void SPI_DC_LOW(void) { digitalWrite(RS, LOW); };
+// 		inline void SPI_DC_HIGH(void) { digitalWrite(RS, HIGH); };
+// 		inline void spiWrite(uint8_t b) {spi->write(b); };
+// 		inline void SPI_WRITE16(uint16_t u) {spi->write16(u); };
+// 		inline void startWrite(void) { SPI_BEGIN_TRANSACTION(); SPI_CS_LOW(); };
+// 		inline void endWrite(void) { SPI_CS_HIGH(); SPI_END_TRANSACTION(); };
+
+// 		void writeCommand(uint8_t cmd);
+
+//     	uint16_t rotation = 0;
+// 		unsigned int width = TFT_WIDTH;
+// 		unsigned int height = TFT_HEIGHT;
+// 		SPIClass *spi = NULL;
+// 		SPISettings spi_settings;
+// };
+
 #endif

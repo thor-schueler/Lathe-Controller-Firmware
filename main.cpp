@@ -19,20 +19,10 @@
 #include <time.h>
 
 #include "src/logging/SerialLogger.h"
-
-#define USE_ADAFRUIT 0
-#if (!USE_ADAFRUIT)
-  #include "src/controller/controller.h"
-#else
-  #include "Adafruit_GFX.h"
-  #include "Adafruit_ILI9341.h"
-#endif
+#include "src/controller/controller.h"
 
 #define VERSION "0.00.00"
 #define TELEMETRY_FREQUENCY_MILLISECS 120000
-
-
-//Controller *controller = NULL;
 
 #ifdef SET_LOOP_TASK_STACK_SIZE
 SET_LOOP_TASK_STACK_SIZE(16384);
@@ -40,6 +30,8 @@ SET_LOOP_TASK_STACK_SIZE(16384);
   // This will only work with ESP-Arduino 2.0.7 or higher. 
   //
 #endif
+
+Controller *controller = NULL;
 
 /**
  * @brief Performs system setup activities, including connecting to WIFI, setting time, obtaining the IoTHub info 
@@ -49,8 +41,6 @@ SET_LOOP_TASK_STACK_SIZE(16384);
  */
 void setup()
 {
-  vTaskDelay(5000);
-
   //
   // Initialize configuration data from EEPROM
   //
@@ -66,24 +56,11 @@ void setup()
   Logger.Info(F(""));
   Logger.Info(F(""));
   
-  #if (USE_ADAFRUIT)
-    //Adafruit_ILI9341 *display = new Adafruit_ILI9341(15, 12, 13, 14, 26, -1);
-    SPIClass spi = SPIClass(HSPI);
-    spi.begin(14, -1, 13, 15);
-    Adafruit_ILI9341 *display = new Adafruit_ILI9341(&spi, 12, 15, 26);
-    display->begin();
-    display->fillScreen(ILI9341_BLACK); vTaskDelay(1000);
-    display->fillScreen(ILI9341_RED); vTaskDelay(1000);
-    display->fillScreen(ILI9341_GREEN); vTaskDelay(1000); 
-    display->fillScreen(ILI9341_BLUE); vTaskDelay(1000);
-  #else
-    //controller = new Controller();
 
-    Controller_Display *display = new Controller_Display();
-    display->init();
-  #endif
+  controller = new Controller();
 
-
+  //Controller_Display *display = new Controller_Display();
+  //display->init();
 
   Logger.Info(F("Init done"));
   Logger.Info_f(F("Free heap: %d"), ESP.getFreeHeap()); 

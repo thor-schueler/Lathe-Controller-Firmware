@@ -13,38 +13,44 @@
 #define TFTLCD_DELAY16  0xFFFF
 #define TFTLCD_DELAY8   0x7F
 #define MAX_REG_NUM     24
+#define swap(a, b) { int16_t t = a; a = b; b = t; }
 
 
-static const uint8_t display_buffer[WIDTH * HEIGHT * 3] PROGMEM = {0};
+static const uint8_t display_buffer[TFT_WIDTH * TFT_HEIGHT * 2] PROGMEM = {0};
+static const uint8_t PROGMEM initcmd[] = {
+	0xEF, 3, 0x03, 0x80, 0x02,
+	0xCF, 3, 0x00, 0xC1, 0x30,
+	0xED, 4, 0x64, 0x03, 0x12, 0x81,
+	0xE8, 3, 0x85, 0x00, 0x78,
+	0xCB, 5, 0x39, 0x2C, 0x00, 0x34, 0x02,
+	0xF7, 1, 0x20,
+	0xEA, 2, 0x00, 0x00,
+	ILI9341_PWCTR1  , 1, 0x23,             // Power control VRH[5:0]
+	ILI9341_PWCTR2  , 1, 0x10,             // Power control SAP[2:0];BT[3:0]
+	ILI9341_VMCTR1  , 2, 0x3e, 0x28,       // VCM control
+	ILI9341_VMCTR2  , 1, 0x86,             // VCM control2
+	ILI9341_MADCTL  , 1, 0x48,             // Memory Access Control
+	ILI9341_VSCRSADD, 1, 0x00,             // Vertical scroll zero
+	ILI9341_PIXFMT  , 1, 0x55,
+	ILI9341_FRMCTR1 , 2, 0x00, 0x18,
+	ILI9341_DFUNCTR , 3, 0x08, 0x82, 0x27, // Display Function Control
+	0xF2, 1, 0x00,                         // 3Gamma Function Disable
+	ILI9341_GAMMASET , 1, 0x01,             // Gamma curve selected
+	ILI9341_GMCTRP1 , 15, 0x0F, 0x31, 0x2B, 0x0C, 0x0E, 0x08, // Set Gamma
+		0x4E, 0xF1, 0x37, 0x07, 0x10, 0x03, 0x0E, 0x09, 0x00,
+	ILI9341_GMCTRN1 , 15, 0x00, 0x0E, 0x14, 0x03, 0x11, 0x07, // Set Gamma
+		0x31, 0xC1, 0x48, 0x08, 0x0F, 0x0C, 0x31, 0x36, 0x0F,
+	ILI9341_SLPOUT  , 0x80,                // Exit Sleep
+	ILI9341_DISPON  , 0x80,                // Display on
+	0x00                                   // End of list
+};
+
 
 /**
  * @brief Generates a new instance of the DISPLAY_SPI class. 
  * @details initializes the SPI and LCD pins including CS, RS, RESET 
  */
-DISPLAY_SPI::DISPLAY_SPI()
-{
-	//if(RESET > 0) pinMode(RESET, OUTPUT);
-	//if(LED > 0)
-	//{
-	//	pinMode(LED, OUTPUT);
-	//		digitalWrite(LED, LOW);
-	//}
-
-	//spi = new SPIClass(HSPI);
-	//spi->setFrequency(20000000);
-	//spi->setBitOrder(MSBFIRST);
-	//spi->setDataMode(SPI_MODE0);
-	//spi->begin(SCK, -1, SID, CS);
-		// explicitely pass the PINs since we need to avoid the assignment of the MISO pin as 
-		// this pin is required elsewhere. 
-
-	//pinMode(RS, OUTPUT);
-	//rotation = 0;
-	//width = WIDTH;
-	//height = HEIGHT;
-	//setWriteDir();
-	//CS_IDLE;
-}
+DISPLAY_SPI::DISPLAY_SPI() {}
 
 #pragma region public methods
 /**
@@ -66,53 +72,12 @@ uint16_t DISPLAY_SPI::RGB_to_565(uint8_t r, uint8_t g, uint8_t b)
  */
 void DISPLAY_SPI::draw_background(const unsigned char* image, size_t size)
 {
-	set_addr_window(0, 0, width - 1, height);
 	CS_ACTIVE;
-	writeCmd8(ILI9341_MEMORYWRITE);
+	set_addr_window(0, 0, width, height);
+	writeCommand(ILI9341_MEMORYWRITE);
 	CD_DATA;
 	spi->transferBytes(image, nullptr, size);
 	CS_IDLE;
-}
-
-/**
- * @brief Draws a bitmap on the display
- * @param x - X coordinate of the upper left corner
- * @param y - Y coordinate of the upper left corner
- * @param width - Width of the bitmap
- * @param height - Height of the bitmap
- * @param BMP - Pointer to the bitmap data
- * @param mode - Bitmap mode (normal or inverse)
- */
-void DISPLAY_SPI::draw_bitmap(uint8_t x,uint8_t y,uint8_t width, uint8_t height, uint8_t *BMP, uint8_t mode)
-{
-  uint8_t i,j,k;
-  uint8_t tmp;
-  for(i=0;i<(height+7)/8;i++)
-  {
-		for(j=0;j<width;j++)
-		{
-			if(mode)
-			{
-				tmp = pgm_read_byte(&BMP[i*width+j]);
-			}
-			else
-			{
-				tmp = ~(pgm_read_byte(&BMP[i*width+j]));
-			}
-			for(k=0;k<8;k++)
-			{
-				if(tmp&0x01)
-				{
-					draw_pixel(x+j, y+i*8+k,1);
-				}
-				else
-				{
-					draw_pixel(x+j, y+i*8+k,0);
-				}
-				tmp>>=1;
-			}
-		}
-   } 
 }
 
 /**
@@ -126,9 +91,9 @@ void DISPLAY_SPI::draw_bitmap(uint8_t x,uint8_t y,uint8_t width, uint8_t height,
  */
 void DISPLAY_SPI::draw_image(const unsigned char* image, size_t size, uint16_t x, uint16_t y, uint16_t w, uint16_t h)
 {
-	set_addr_window(x, y, x+ w - 1, y + h);
 	CS_ACTIVE;
-	writeCmd8(ILI9341_MEMORYWRITE);
+	set_addr_window(x, y, w, h);
+	writeCommand(ILI9341_MEMORYWRITE);
 	CD_DATA;
 	spi->transferBytes(image, nullptr, size);
 	CS_IDLE;
@@ -142,16 +107,66 @@ void DISPLAY_SPI::draw_image(const unsigned char* image, size_t size, uint16_t x
  */
 void DISPLAY_SPI::draw_pixel(int16_t x, int16_t y, uint16_t color)
 {
-	if((x < 0) || (y < 0) || (x > get_width()) || (y > get_height()))
-	{
-		return;
-	}
-	set_addr_window(x, y, 1, 1);
-	CS_ACTIVE;
-	writeCmd8(ILI9341_MEMORYWRITE);
-	writeData16(color);
-	CS_IDLE;
+  // Clip first...
+  if ((x >= 0) && (x < width) && (y >= 0) && (y < height)) {
+    // THEN set up transaction (if needed) and draw...
+    startWrite();
+    set_addr_window(x, y, 1, 1);
+    SPI_WRITE16(color);
+    endWrite();
+  }
 }
+
+void DISPLAY_SPI::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) 
+{
+  drawLine(x, y, x+w-1, y, color);
+}
+
+void DISPLAY_SPI::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) 
+{
+  drawLine(x, y, x, y+h-1, color);
+}
+
+void DISPLAY_SPI::drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t color) 
+{
+  int16_t steep = abs(y1 - y0) > abs(x1 - x0);
+  if (steep) {
+    swap(x0, y0);
+    swap(x1, y1);
+  }
+
+  if (x0 > x1) {
+    swap(x0, x1);
+    swap(y0, y1);
+  }
+
+  int16_t dx, dy;
+  dx = x1 - x0;
+  dy = abs(y1 - y0);
+
+  int16_t err = dx / 2;
+  int16_t ystep;
+
+  if (y0 < y1) {
+    ystep = 1;
+  } else {
+    ystep = -1;
+  }
+
+  for (; x0<=x1; x0++) {
+    if (steep) {
+      draw_pixel(y0, x0, color);
+    } else {
+      draw_pixel(x0, y0, color);
+    }
+    err -= dy;
+    if (err < 0) {
+      y0 += ystep;
+      err += dx;
+    }
+  }
+}
+
 
 /**
  * @brief Fill area from x to x+w, y to y+h
@@ -163,61 +178,14 @@ void DISPLAY_SPI::draw_pixel(int16_t x, int16_t y, uint16_t color)
  */
 void DISPLAY_SPI::fill_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color)
 {
-	int16_t end; 
-	uint8_t *buffer;
-	uint16_t i;
-	if (w < 0) 
-	{
-		w = -w;
-		x -= w;
-	}                           //+ve w
-	end = x + w;
-	if (x < 0)
-	{
-		x = 0;
-	}
-	if (end > get_width())
-	{
-		end = get_width();
-	}
-	w = end - x;
-	if (h < 0) 
-	{
-		h = -h;
-		y -= h;
-	}                           //+ve h
-	end = y + h;
-	if (y < 0)
-	{
-		y = 0;
-	}
-	if (end > get_height())
-	{
-		end = get_height();
-	}
-	h = end - y;
+  for (int16_t i=x; i<x+w; i++) {
+    drawFastVLine(i, y, h, color);
+  }
+}
 
-	buffer = new uint8_t[(size_t)(h*2)];
-	uint8_t u = (uint8_t)((color >> 8) & 0xFF);
-	uint8_t l = (uint8_t)(color & 0xFF);
-	for(i=0; i<h*2; i+=2) 
-	{
-		buffer[i] = u;
-		buffer[i+1] = l;
-	}
-	set_addr_window(x, y, x + w - 1, y + h);
-		// reducing w by one when setting the address window is important. 
-		// the frame memory is written x,y x+1,y, ..., x+w-1,y, x,y+1, ... 
-		// so if we do not reduce by 1, we have an extra line.... 
-	CS_ACTIVE;
-	writeCmd8(ILI9341_MEMORYWRITE);
-	CD_DATA;
-	for (i=0; i<w; i++)
-	{
-		spi->transferBytes(buffer, nullptr, h*2);
-	} 
-	CS_IDLE;
-	delete[] buffer;
+void DISPLAY_SPI::fillScreen(uint16_t color) 
+{
+  fill_rect(0, 0, width, height, color);
 }
 
 /**
@@ -256,6 +224,7 @@ int16_t DISPLAY_SPI::get_width() const
  */
 void DISPLAY_SPI::init()
 {
+	Logger.Info(F("....Starting SPI display init."));
 	pinMode(RS, OUTPUT);
 	pinMode(CS, OUTPUT);
 	CS_IDLE;
@@ -273,93 +242,23 @@ void DISPLAY_SPI::init()
 		digitalWrite(LED, LOW);
 	}
 	reset();
-	start_display();
+
+	uint8_t cmd, x, numArgs;
+	const uint8_t *addr = initcmd;
+	while ((cmd = pgm_read_byte(addr++)) > 0) {
+		x = pgm_read_byte(addr++);
+		numArgs = x & 0x7F;
+		sendCommand(cmd, addr, numArgs);
+		addr += numArgs;
+		if (x & 0x80)
+		delay(150);
+	}
 
 	rotation = 0;
-	width = WIDTH;
-	height = HEIGHT;
+	width = TFT_WIDTH;
+	height = TFT_HEIGHT;
 	toggle_backlight(true);
-}
-
-/**
- * @brief Inverts the display
- * @param invert - True to invert, false to revert inversion
- */
-void DISPLAY_SPI::invert_display(boolean invert)
-{
-	CS_ACTIVE;
-	writeCmd8(invert ? ILI9341_INVERTON : ILI9341_INVERTOFF);
-	CS_IDLE;
-}
-
-/**
- * @brief Push color table for 16 bits to controller
- * @param block - the color table
- * @param n - the number of colors in the table
- * @param first - true to first send an initialization command
- * @param flags - flags
- */
-void DISPLAY_SPI::push_color_table(uint16_t * block, int16_t n, bool first, uint8_t flags)
-{
-	uint16_t color;
-	uint8_t h, l;
-	bool isconst = flags & 1;
-	CS_ACTIVE;
-	if (first) 
-	{  
-		writeCmd8(ILI9341_MEMORYWRITE);		
-	}
-	while (n-- > 0) 
-	{
-		if (isconst) 
-		{
-			color = pgm_read_word(block++);		
-		} 
-		else 
-		{
-			color = (*block++);			
-
-		}
-		writeData16(color);
-	}
-	CS_IDLE;
-}
-
-/**
- * @brief Push color table for 8 bits to controller
- * @param block - the color table
- * @param n - the number of colors in the table
- * @param first - true to first send an initialization command
- * @param flags - flags
- */
-void DISPLAY_SPI::push_color_table(uint8_t * block, int16_t n, bool first, uint8_t flags)
-{
-	uint16_t color;
-	uint8_t h, l;
-	bool isconst = flags & 1;
-	bool isbigend = (flags & 2) != 0;
-	CS_ACTIVE;
-	if (first) 
-	{
-		writeCmd8(ILI9341_MEMORYWRITE);		
-	}
-	while (n-- > 0) 
-	{
-		if (isconst) 
-		{
-			h = pgm_read_byte(block++);
-			l = pgm_read_byte(block++);
-		} 
-		else 
-		{
-			h = (*block++);
-			l = (*block++);
-		}
-		color = (isbigend) ? (h << 8 | l) :  (l << 8 | h);
-		
-		writeData16(color);
-	}
-	CS_IDLE;
+	Logger.Info(F("....SPI display init complete."));
 }
 
 /**
@@ -393,31 +292,22 @@ void DISPLAY_SPI::reset()
  */
 void DISPLAY_SPI::set_rotation(uint8_t r)
 {
-	//return;
-	rotation = r & 3;           // just perform the operation ourselves on the protected variables
-	width = (rotation & 1) ? HEIGHT : WIDTH;
-	height = (rotation & 1) ? WIDTH : HEIGHT;
-	CS_ACTIVE;
-
-	uint8_t val;
-	switch (rotation)
-	{
-		case 0:
-			val = ILI9341_MADCTL_MX | ILI9341_MADCTL_RGB; // 0 degree
-			break;
-		case 1:
-			val = ILI9341_MADCTL_MV | ILI9341_MADCTL_RGB; // 90 degree
-			break;
-		case 2:
-			val = ILI9341_MADCTL_MY | ILI9341_MADCTL_RGB; // 180 degree
-			break;
-		case 3:
-			val = ILI9341_MADCTL_MV | ILI9341_MADCTL_MX | ILI9341_MADCTL_MY | ILI9341_MADCTL_RGB; // 270 degree
-			break;
-	}
-	writeCmdData8(ILI9341_MEMORYACCESS, val);
-	set_addr_window(0, 0, width - 1, height - 1);
-	CS_IDLE;
+  rotation = r % 4; // can't be higher than 3
+  switch (rotation) {
+  case 0:
+    r = (MADCTL_MX | MADCTL_BGR); width = TFT_WIDTH; height = TFT_HEIGHT;
+    break;
+  case 1:
+    r = (MADCTL_MV | MADCTL_BGR); width = TFT_HEIGHT; height = TFT_WIDTH;
+    break;
+  case 2:
+    r = (MADCTL_MY | MADCTL_BGR); width = TFT_WIDTH; height = TFT_HEIGHT;
+    break;
+  case 3:
+    r = (MADCTL_MX | MADCTL_MY | MADCTL_MV | MADCTL_BGR); width = TFT_HEIGHT; height = TFT_WIDTH;
+    break;
+  }
+  sendCommand(ILI9341_MADCTL, &r, 1);
 }
 
 /**
@@ -438,6 +328,7 @@ void DISPLAY_SPI::toggle_backlight(boolean state)
 		}
 	}
 }
+
 #pragma endregion
 
 #pragma region protected methods
@@ -445,196 +336,30 @@ void DISPLAY_SPI::toggle_backlight(boolean state)
  * @brief Sets the LCD address window 
  * @param x1 - Upper left x
  * @param y1 - Upper left y
- * @param x2 - Lower right x
- * @param y2 - Lower right y
+ * @param w - Width
+ * @param h - Height
  */
-void DISPLAY_SPI::set_addr_window(unsigned int x1, unsigned int y1, unsigned int x2, unsigned int y2)
+void DISPLAY_SPI::set_addr_window(unsigned int x1, unsigned int y1, unsigned int w, unsigned int h)
 {
-	CS_ACTIVE;
-	uint8_t x_buf[] = {x1>>8,x1,x2>>8,x2};
-	uint8_t y_buf[] = {y1>>8,y1,y2>>8,y2};
-	push_command(ILI9341_COLADDRSET, x_buf, 4);
-		// Send Column Address Set Command 
-		// This command is used to define the area of the frame memory that the MCU can access. This command makes no change on 
-		// the other driver status. The values of SC [15:0] (first and second data bytes) and EC [15:0] (third and fourth data bytes) 
-		// are referred when RAMWR command is applied. Each value 
-		// represents one column line in the Frame Memory.
-	push_command(ILI9341_PAGEADDRSET, y_buf, 4);
-		// Send Page Address Set Command
-		// This command is used to define the area of the frame memory that the MCU can access. This command makes no change on 
-		// the other driver status. The values of SP [15:0] (first and second data bytes) and EP [15:0] (third and fourth data bytes) 
-		// are referred when RAMWR command is applied. Each value 
-		// represents one Page line in the Frame Memory.  
-	CS_IDLE;		
-}
+  static uint16_t old_x1 = 0xffff, old_x2 = 0xffff;
+  static uint16_t old_y1 = 0xffff, old_y2 = 0xffff;
 
-/**
- * @brief Starts the display, initializes registers
- */
-void DISPLAY_SPI::start_display()
-{
-	// ILI9341 initialization sequence
-    static const uint8_t ILI9341_regValues[] PROGMEM = {
-        0xEF, 3, 0x03, 0x80, 0x02,								// Prepares the controller for extended command access
-																// Configures internal voltage or timing parameters
-																// May unlock access to other registers used in subsequent commands
-        0xCF, 3, 												// Power control B - configures internal power settings related to the step-up circuit and voltage regulator behavior
-				0x00, 											// 		Reserved
-				0xC1, 											// 		Controls internal step-up or power amplifier gain
-				0x30,											// 		Sets Vcore voltage level or regulator output
-        0xED, 4, 												// Power on sequence control - vendor-defined command that configures how the internal power circuits ramp up during startup
-				0x64,											// 		Power ramp timing or step-up factor 
-				0x03, 											// 		Control bits for enabling internal power blocks
-				0x12,											// 		Vcore voltage setting or reference
-				0x81,											// 		Enable internal regulator or reference voltage
-        0xE8, 3,												// Driver Timing Control A - configures internal timing parameters for the display’s power-up and signal synchronization
-				0x85, 											//		EQ control or precharge timing for internal power circuits
-				0x00, 											//		Reserved
-				0x78,											// 		Output timing control—affects gate driver and source driver sync
-        0xCB, 5, 												// Power Control A. It configures internal voltage settings and power ramp behavior—critical for ensuring the display’s internal regulators and charge pumps behave predictably during startup.
-				0x39, 											//		Vcore control or step-up gain
-				0x2C, 											//		Power control tuning
-				0x00, 											//		Reserved
-				0x34, 											//		VGH/VGL voltage level (gate driver high/low)
-				0x02,											//		Internal regulator enable or reference voltage
-        0xF7, 1, 												// Pump Ratio Control - configures the ratio of the internal charge pump used to generate higher voltages for gate drivers
-				0x20,											//		Sets the charge pump ratio—affects VGH/VGL generation for gate drivers 
-		0xEA, 2, 0x00, 0x00,									// Driver Timing Control B - low-level configuration that fine-tunes internal timing parameters for the display’s gate and source drivers
-		ILI9341_POWERCONTROL1, 1, 								// Power Control 1 - core voltage configuration commands—it sets the internal voltage regulator that drives the source driver circuitry
-				0x23,											//		Sets the internal voltage regulator output (VRH)
-        ILI9341_POWERCONTROL2, 1, 								// Power Control 2 - sets the source driver power supply control.
-				0x10,											//		SAP[2:0] — Source driver power control
-        ILI9341_VCOMCONTROL1, 2, 								// VCOM Control 1 - sets the common electrode voltage levels.
-				0x3e, 											//		VCOMH — VCOM high voltage ≈ 4.5V
-				0x28,											//		VCOML — VCOM low voltage ≈ -1.5V
-        ILI9341_VCOMCONTROL2, 1, 								// VCOM Control 2 - Fine-tunes the VCOM voltage offset.
-				0x86,											// 		VCOM offset - empirically tuned for most modules.
-        ILI9341_MEMORYACCESS, 1, 								// Memory Access Control (MADCTL)
-				0x40,											// 		Bit7 - MY - Row Address Order (flip vertically)
-																//		Bit6 - MX -	Column Address Order (flip horizontally)
-																//		Bit5 - MV -	Row/Column Exchange (rotate 90°)
-																//		Bit3 - BGR - RGB/BGR Order
-																//		Bit2 - ML - Vertical Refresh Order
-																// 		Bit1 - MH - Horizontal Refresh Order
-        ILI9341_VSCRSADD, 1, 0x00,								// Vertical Scroll Offset to 0x00
-		ILI9341_PIXELFORMAT, 1, 								// Pixel Format Set
-				0x55,											//		0x55 - 16-bit (RGB565), 0x66 - 18-bit (RGB666)
-        ILI9341_FRAMECONTROL, 2, 								// Frame Rate Control (Normal Mode)
-				0x00, 											//		Division ratio
-				0x18,											//		Frame rate control (≈ 70Hz), 0x18 is a balanced value for smooth visuals and low EMI.
-        ILI9341_DISPLAYFUNC, 3, 								// Display Function Control - Fine-tunes how pixels are refreshed, Helps reduce flicker and improve visual stability
-				0x08, 											//		Scan direction (e.g., left-to-right, top-to-bottom)
-				0x82, 											//		LCD drive line configuration
-				0x27,											//		Timing control for gate driver and source driver
-        0xF2, 1, 0x00,											// Enable 3Gamma Control - 0x00 disables it, allowing manual gamma tuning via 0xE0 and 0xE1.
-        ILI9341_GAMMASET, 1, 									// Gamma Set - Selects one of four fixed gamma curves.
-				0x01,											//		0x01 - Curve 1 (default), 0x02 - Curve 2, 0x03 - Curve 3, 0x04 - Curve 4
-        ILI9341_GMCTRP1, 15, 									// Positive Gamma Correction - Fine-tunes the gamma curve for positive voltages. Higher values → steeper transitions (more contrast), Lower values → flatter transitions (softer gradients)
-				0x0F, 											//		V63
-				0x31, 0x2B, 0x0C, 0x0E,	0x08,					// 		V1–V5 affect dark tones
-				0x4E, 0xF1, 0x37, 0x07, 0x10, 					//		V6–V10 shape midtones
-				0x03, 0x0E, 0x09, 0x00,							//		V11–V14 influence highlights and white balance
-        ILI9341_GMCTRN1, 15, 									// Negative Gamma Correction - omplements 0xE0 (Positive Gamma Correction) and shapes the tonal curve for darker regions and shadows
-				0x00,											//		V63 
-				0x0E, 0x14, 0x03, 0x11, 0x07, 					// 		V1–V5: Influence black levels and low-brightness transitions.
-				0x31, 0xC1, 0x48, 0x08, 0x0F, 					//		V6–V10: Shape midtone response and contrast.
-				0x0C, 0x31, 0x36, 0x0F,							//		V11–V14: Affect highlights and white balance.
-        ILI9341_SLEEPOUT, 0,									// Sleep Out - wakes the display from sleep mode.
-        TFTLCD_DELAY8, 120,										// Necessary delay for 0x11
-        ILI9341_DISPLAYON, 0,									// Display on
-		0x00                                   					// End of list
-    };
-
-  	uint8_t cmd, x, numArgs;
-  	const uint8_t *addr = ILI9341_regValues;
-	while ((cmd = pgm_read_byte(addr++)) > 0) 
-	{
-    	x = pgm_read_byte(addr++);
-    	numArgs = x & 0x7F;
-		if(x==TFTLCD_DELAY8) delay(numArgs);
-		else
-		{
-    		sendCommand(cmd, addr, numArgs);
-    		addr += numArgs;
-		}
-  	}
-
-	//init_table8(ILI9341_regValues, sizeof(ILI9341_regValues));
-	//set_rotation(rotation); 
-	//invert_display(false);
-	Logger.Info(F("....ILI9341 display startup done."));
-}
-
-/**
- * @brief Writes the display buffer contents to the display
- * @remarks The display buffer is stored in the static display_buffer array
- */
-void DISPLAY_SPI::write_display_buffer()
-{
-	uint8_t i, n;	
-	CS_ACTIVE;
-	for(i=0; i<HEIGHT; i++)  
-	{  
-		writeCmd8(ILI9341_PAGEADDRSET+i);    
-		writeCmd8(0x02); 
-		writeCmd8(ILI9341_COLADDRSET); 
-		for(n=0; n<WIDTH; n++)
-		{
-			writeData8(display_buffer[i*WIDTH+n]); 
-		}
-	} 
-	CS_IDLE;
-}
-#pragma endregion
-
-#pragma region private methods
-/**
- * @brief Pushes initialization data and commands to the display controller
- * @details This method uses byte data. The first byte is a command, the second the number of parameters, followed by all the parameters, then next command etc.....
- * @param table - Pointer to table of byte data
- * @param size - The number of bytes in the table 
- */
-void DISPLAY_SPI:: init_table8(const void *table, int16_t size)
-{
-	uint8_t i;
-	uint8_t *p = (uint8_t *) table, dat[MAX_REG_NUM]; 
-	while (size > 0) 
-	{
-		uint8_t cmd = pgm_read_byte(p++);
-		uint8_t len = pgm_read_byte(p++);
-		if (cmd == TFTLCD_DELAY8) 
-		{
-			delay(len);
-			len = 0;
-		} 
-		else 
-		{
-			for (i = 0; i < len; i++)
-			{
-				dat[i] = pgm_read_byte(p++);
-			}
-			push_command(cmd,dat,len);
-		}
-		size -= len + 2;
-	}
-}
-
-/**
- * @brief Writes command and data block to the display controller
- * @param cmd - The command to write
- * @param data - The block of data to write
- * @param data_size - Size of the data block
- */
-void DISPLAY_SPI::push_command(uint8_t cmd, uint8_t *data, int8_t data_size)
-{
-	CS_ACTIVE;
-	writeCmd8(cmd);
-	while (data_size-- > 0) 
-	{
-		uint8_t u8 = *data++;
-		writeData8(u8); 
-	}
-	CS_IDLE;
+  uint16_t x2 = (x1 + w - 1), y2 = (y1 + h - 1);
+  if (x1 != old_x1 || x2 != old_x2) {
+    writeCommand(ILI9341_CASET); // Column address set
+    SPI_WRITE16(x1);
+    SPI_WRITE16(x2);
+    old_x1 = x1;
+    old_x2 = x2;
+  }
+  if (y1 != old_y1 || y2 != old_y2) {
+    writeCommand(ILI9341_PASET); // Row address set
+    SPI_WRITE16(y1);
+    SPI_WRITE16(y2);
+    old_y1 = y1;
+    old_y2 = y2;
+  }
+  writeCommand(ILI9341_RAMWR); // Write to RAM	
 }
 
 /** 
@@ -643,67 +368,39 @@ void DISPLAY_SPI::push_command(uint8_t cmd, uint8_t *data, int8_t data_size)
  * @param   dataBytes         A pointer to the Data bytes to send
  * @param   numDataBytes      The number of bytes we should send
  */
-void DISPLAY_SPI::sendCommand(uint8_t commandByte, const uint8_t *dataBytes, uint8_t numDataBytes) {
-  CS_ACTIVE;
-  CD_COMMAND;
-  spi_write(commandByte); // Send the command byte
-
-  CD_DATA;
-  for (int i = 0; i < numDataBytes; i++) spi_write(pgm_read_byte(dataBytes++));
-
-  CS_IDLE;
-}
-
-/**
- * @brief Read data from the SPI bus
- * @return the data read from the bus
- */
-uint8_t DISPLAY_SPI::spi_read()
+void DISPLAY_SPI::sendCommand(uint8_t commandByte, const uint8_t *dataBytes, uint8_t numDataBytes) 
 {
-	return spi->transfer(0xFF);
+  SPI_BEGIN_TRANSACTION();
+  if (CS >= 0)
+    SPI_CS_LOW();
+
+  SPI_DC_LOW();          // Command mode
+  spiWrite(commandByte); // Send the command byte
+
+  SPI_DC_HIGH();
+  for (int i = 0; i < numDataBytes; i++) {
+      spiWrite(*dataBytes); // Send the data bytes
+      dataBytes++;
+  }
+
+  if (CS >= 0)
+    SPI_CS_HIGH();
+  SPI_END_TRANSACTION();
 }
 
-/**
- * @brief Performs a write on the SPI bus.
- * @param data - data to write
- */
-void DISPLAY_SPI::spi_write(uint8_t data)
-{
-	spi->transfer(data);
+/*!
+    @brief  Write a single command byte to the display. Chip-select and
+            transaction must have been previously set -- this ONLY sets
+            the device to COMMAND mode, issues the byte and then restores
+            DATA mode. There is no corresponding explicit writeData()
+            function -- just use spiWrite().
+    @param  cmd  8-bit command to write.
+*/
+void DISPLAY_SPI::writeCommand(uint8_t cmd) {
+  SPI_DC_LOW();
+  spiWrite(cmd);
+  SPI_DC_HIGH();
 }
 
-/**
- * @brief Writes a command to the display controller.
- * @param cmd - Command to write
- */
-void DISPLAY_SPI::write_cmd(uint16_t cmd)
-{
-	CS_ACTIVE;
-	writeCmd16(cmd);
-	CS_IDLE;
-}
-
-/**
- * @brief Writes data to the display controller.
- * @param data - Data to write
- */
-void DISPLAY_SPI::write_data(uint16_t data)
-{
-	CS_ACTIVE;
-	writeData16(data);
-	CS_IDLE;
-}
-
-/**
- * @brief Writes command and data combination to the display controller.
- * @param cmd - Command to write
- * @param data - Data to write
- */
-void DISPLAY_SPI::write_cmd_data(uint16_t cmd, uint16_t data)
-{
-	CS_ACTIVE;
-	writeCmdData16(cmd,data);
-	CS_IDLE;
-}
 #pragma endregion
 
