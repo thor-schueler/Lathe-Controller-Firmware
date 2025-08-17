@@ -38,12 +38,10 @@ static Controller *_instance = nullptr;
  */
 Controller::Controller()
 {
-    vTaskDelay(5000);
     Logger.Info(F("Startup"));
     Logger.Info(F("....Initialize Display"));
     _display = new Controller_Display();
     _display->init();
-    //_display->set_rotation(1);
     _instance = this;
 
     Logger.Info(F("....Inititialize GPIO pins"));
@@ -55,12 +53,13 @@ Controller::Controller()
     pinMode(I_LIGHT, INPUT_PULLUP);
     pinMode(I_CONTROLBOARD_DETECT, INPUT_PULLDOWN);
     pinMode(I_SPINDLE_PULSE, INPUT_PULLDOWN);
+    pinMode(I_BACKLIGHT, INPUT_PULLDOWN); 
+    pinMode(I_LUBE, INPUT_PULLUP);
 
     pinMode(O_SPINDLE_DIRECTION_SWITCH_A, OUTPUT);
     pinMode(O_SPINDLE_DIRECTION_SWITCH_B, OUTPUT);
     pinMode(O_SPINDLE_OFF, OUTPUT);
     pinMode(O_ENGINE_DISCHARGE, OUTPUT);
-
 
     Logger.Info(F("....Attach event receivers for GPIO"));
     attachInterrupt(digitalPinToInterrupt(I_MAIN_POWER), std::bind(&Controller::handle_input, this), CHANGE);
@@ -68,7 +67,9 @@ Controller::Controller()
     attachInterrupt(digitalPinToInterrupt(I_FOR_F), std::bind(&Controller::handle_input, this), CHANGE);
     attachInterrupt(digitalPinToInterrupt(I_FOR_B), std::bind(&Controller::handle_input, this), CHANGE);
     attachInterrupt(digitalPinToInterrupt(I_LIGHT), std::bind(&Controller::handle_input, this), CHANGE);
-    attachInterrupt(digitalPinToInterrupt(I_ENERGIZE), std::bind(&Controller::handle_energize, this), FALLING);
+    attachInterrupt(digitalPinToInterrupt(I_LUBE), std::bind(&Controller::handle_input, this), CHANGE);
+    attachInterrupt(digitalPinToInterrupt(I_BACKLIGHT), std::bind(&Controller::handle_input, this), CHANGE);
+    attachInterrupt(digitalPinToInterrupt(I_ENERGIZE), std::bind(&Controller::handle_energize, this), FALLING);    
     //attachInterrupt(digitalPinToInterrupt(I_CONTROLBOARD_DETECT), std::bind(&Controller::handle_input, this), CHANGE);
 
     if(USE_POLLING_FOR_RPM)
@@ -89,7 +90,6 @@ Controller::Controller()
         attachInterrupt(digitalPinToInterrupt(I_SPINDLE_PULSE), std::bind(&Controller::handle_spindle_pulse, this), FALLING);
     }
     
-
     Logger.Info("....Initializing Relays");
     digitalWrite(O_ENGINE_DISCHARGE, LOW); 
     digitalWrite(O_SPINDLE_OFF, LOW);
@@ -103,13 +103,17 @@ Controller::Controller()
     _for_f = digitalRead(I_FOR_F);
     _for_b = digitalRead(I_FOR_B);
     _light = digitalRead(I_LIGHT);
+    _backlight = digitalRead(I_BACKLIGHT);
+    _lube = digitalRead(I_LUBE);
     _is_energized = digitalRead(I_CONTROLBOARD_DETECT);
     Logger.Info_f(F("         Main Power: %s"), _main_power ? "Off" : "On");
     Logger.Info_f(F("         Emergency Shutdown: %s"), _has_emergency ? "On" : "Off");
     Logger.Info_f(F("         Forward Selector: %s"), _for_f ? "On" : "Off");      
     Logger.Info_f(F("         Backward Selector: %s"), _for_b ? "On" : "Off");    
     Logger.Info_f(F("         Light: %s"), _light ? "Off" : "On");
-    Logger.Info_f(F("         Energized: %s"), _is_energized ? "Hot" : "Cold");  
+    Logger.Info_f(F("         Backlight: %s"), _backlight ? "Off" : "On");  
+    Logger.Info_f(F("         Lube: %s"), _is_energized ? "Off" : "On");
+    Logger.Info_f(F("         Energized: %s"), _is_energized ? "Hot" : "Cold");
 
     Logger.Info(F("....Generating Mutexes"));
     _display_mutex = xSemaphoreCreateBinary();  xSemaphoreGive(_display_mutex);
@@ -160,6 +164,8 @@ Controller::~Controller()
     detachInterrupt(digitalPinToInterrupt(I_FOR_B));
     detachInterrupt(digitalPinToInterrupt(I_LIGHT));
     detachInterrupt(digitalPinToInterrupt(I_ENERGIZE));
+    detachInterrupt(digitalPinToInterrupt(I_BACKLIGHT));
+    detachInterrupt(digitalPinToInterrupt(I_LUBE));
 }
 
 
@@ -192,9 +198,10 @@ void Controller::display_runner(void* args)
                     //restore display background after emergency
                     _this->_display->update_background();
                     had_emergency = false;
+                    is_first = true;
                 }
 
-                if(_this->_rpm != old_rpm)
+                if(_this->_rpm != old_rpm || is_first)
                 {
                     // write RPMs to display
                     _this->_display->write_rpm(_this->_rpm);
@@ -220,10 +227,10 @@ void Controller::display_runner(void* args)
                 _this->_display->update_light_state(_this->_light);
 
                 // update backlight state
-                _this->_display->update_back_light(false);
+                _this->_display->update_back_light(_this->_backlight);
 
                 // update lube state
-                _this->_display->update_lube_state(false);
+                _this->_display->update_lube_state(_this->_lube);
             }
             xSemaphoreGive(_this->_display_mutex);
         }
@@ -264,8 +271,17 @@ void Controller::input_runner(void* args)
         if(digitalRead(I_LIGHT) != _this->_light) 
         {
             _this->_light = !_this->_light;
-            should_print = true;
             Logger.Info_f(F("Light toggled: %s"), _this->_light ? "Off" : "On");
+        }
+        if(digitalRead(I_BACKLIGHT) != _this->_backlight) 
+        {
+            _this->_backlight = !_this->_backlight;
+            Logger.Info_f(F("Backlight toggled: %s"), _this->_backlight ? "Off" : "On");
+        }
+        if(digitalRead(I_LUBE) != _this->_lube) 
+        {
+            _this->_lube = !_this->_lube;
+            Logger.Info_f(F("Lubrication toggled: %s"), _this->_lube ? "Off" : "On");
         }
         if(digitalRead(I_FOR_F) != _this->_for_f) 
         {
@@ -383,7 +399,7 @@ void Controller::rpm_runner(void* args)
     { 
         _this->calculate_rpm();
         vTaskDelay(pdMS_TO_TICKS(RPM_CALCULATION_INTERVAL));
-        _this->_rpm = random(2500);
+        //_this->_rpm = random(2500);
     }
 }
 

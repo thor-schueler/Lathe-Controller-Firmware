@@ -17,6 +17,8 @@
 #define I_LIGHT 22
 #define I_CONTROLBOARD_DETECT 27
 #define I_SPINDLE_PULSE 33
+#define I_BACKLIGHT 2
+#define I_LUBE 23
 
 #define O_SPINDLE_DIRECTION_SWITCH_A 21
 #define O_SPINDLE_DIRECTION_SWITCH_B 19
@@ -139,6 +141,8 @@ class Controller
         volatile bool _for_b = false;
         volatile bool _light = false;
         volatile bool _is_energized = false;
+        volatile bool _backlight = false;
+        volatile bool _lube = false;
 
         volatile State _direction_a;
         volatile State _direction_b;

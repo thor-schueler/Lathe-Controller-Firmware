@@ -58,14 +58,9 @@ void setup()
   
 
   controller = new Controller();
-
-  //Controller_Display *display = new Controller_Display();
-  //display->init();
-
   Logger.Info(F("Init done"));
   Logger.Info_f(F("Free heap: %d"), ESP.getFreeHeap()); 
   Logger.Info(F(""));
-  
 }
 
 /**

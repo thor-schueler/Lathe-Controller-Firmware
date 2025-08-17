@@ -7,10 +7,6 @@
 #include "Arduino.h"
 #include <SPI.h>
 #include "mcu_spi_magic.h"
-#include "../display_gui/display_gui.h"
-
-//#include "Adafruit_GFX.h"
-//#include "Adafruit_ILI9341.h"
 
 /** 
  * This program implements the SPI display for the wheel.

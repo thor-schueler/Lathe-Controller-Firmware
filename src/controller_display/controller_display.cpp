@@ -102,7 +102,7 @@ void Controller_Display::update_light_state(bool lighted)
  */
 void Controller_Display::update_lube_state(bool active)
 {
-  draw_image(active ? lube_on : lube_off, active ? lube_on_size : lube_off_size, lube_x, lube_y, lube_w, lube_h);
+  draw_image(active ? lube_off : lube_on, active ? lube_off_size : lube_on_size, lube_x, lube_y, lube_w, lube_h);
 }
 
 /**
