@@ -51,10 +51,11 @@ Controller::Controller()
     pinMode(I_FOR_F, INPUT);
     pinMode(I_FOR_B, INPUT);
     pinMode(I_LIGHT, INPUT_PULLUP);
-    pinMode(I_CONTROLBOARD_DETECT, INPUT_PULLDOWN);
-    pinMode(I_SPINDLE_PULSE, INPUT_PULLDOWN);
     pinMode(I_BACKLIGHT, INPUT_PULLDOWN); 
     pinMode(I_LUBE, INPUT_PULLUP);
+    pinMode(I_CONTROLBOARD_DETECT, INPUT_PULLDOWN);
+    pinMode(I_SPINDLE_PULSE, INPUT_PULLDOWN);
+
 
     pinMode(O_SPINDLE_DIRECTION_SWITCH_A, OUTPUT);
     pinMode(O_SPINDLE_DIRECTION_SWITCH_B, OUTPUT);
@@ -70,7 +71,10 @@ Controller::Controller()
     attachInterrupt(digitalPinToInterrupt(I_LUBE), std::bind(&Controller::handle_input, this), CHANGE);
     attachInterrupt(digitalPinToInterrupt(I_BACKLIGHT), std::bind(&Controller::handle_input, this), CHANGE);
     attachInterrupt(digitalPinToInterrupt(I_ENERGIZE), std::bind(&Controller::handle_energize, this), FALLING);    
-    //attachInterrupt(digitalPinToInterrupt(I_CONTROLBOARD_DETECT), std::bind(&Controller::handle_input, this), CHANGE);
+    attachInterrupt(digitalPinToInterrupt(I_CONTROLBOARD_DETECT), std::bind(&Controller::handle_input, this), FALLING);
+        // we only process falling here as an interrupt as the control board might shut off 
+        // due to overload and we need to be informed of that. All rising is initiated by us, so 
+        // we do not need an interrupt for that. 
 
     if(USE_POLLING_FOR_RPM)
     {
@@ -111,8 +115,8 @@ Controller::Controller()
     Logger.Info_f(F("         Forward Selector: %s"), _for_f ? "On" : "Off");      
     Logger.Info_f(F("         Backward Selector: %s"), _for_b ? "On" : "Off");    
     Logger.Info_f(F("         Light: %s"), _light ? "Off" : "On");
-    Logger.Info_f(F("         Backlight: %s"), _backlight ? "Off" : "On");  
-    Logger.Info_f(F("         Lube: %s"), _is_energized ? "Off" : "On");
+    Logger.Info_f(F("         Backlight: %s"), _backlight ? "On" : "Off");  
+    Logger.Info_f(F("         Lube: %s"), _lube ? "Off" : "On");
     Logger.Info_f(F("         Energized: %s"), _is_energized ? "Hot" : "Cold");
 
     Logger.Info(F("....Generating Mutexes"));
@@ -166,6 +170,7 @@ Controller::~Controller()
     detachInterrupt(digitalPinToInterrupt(I_ENERGIZE));
     detachInterrupt(digitalPinToInterrupt(I_BACKLIGHT));
     detachInterrupt(digitalPinToInterrupt(I_LUBE));
+    detachInterrupt(digitalPinToInterrupt(I_CONTROLBOARD_DETECT));
 }
 
 
@@ -276,7 +281,7 @@ void Controller::input_runner(void* args)
         if(digitalRead(I_BACKLIGHT) != _this->_backlight) 
         {
             _this->_backlight = !_this->_backlight;
-            Logger.Info_f(F("Backlight toggled: %s"), _this->_backlight ? "Off" : "On");
+            Logger.Info_f(F("Backlight toggled: %s"), _this->_backlight ? "On" : "Off");
         }
         if(digitalRead(I_LUBE) != _this->_lube) 
         {
@@ -336,6 +341,8 @@ void Controller::input_runner(void* args)
                 if(_this->_is_energized)
                 {
                     Logger.Info_f("    De-Energizing engine...");
+                    gpio_intr_disable(static_cast<gpio_num_t>(I_CONTROLBOARD_DETECT));  
+                        // temporarily disable interrupt to prevent double processing
                     digitalWrite(O_ENGINE_DISCHARGE, HIGH);
                     do { 
                         _this->_is_energized = digitalRead(I_CONTROLBOARD_DETECT); 
@@ -343,7 +350,14 @@ void Controller::input_runner(void* args)
                         vTaskDelay(10);
                     }
                     while (_this->_is_energized && loop_break_counter < 1000);
+                    if(!_this->_is_energized) Logger.Info("    Engine is now de-energized.");
+                    else
+                    {
+                        Logger.Error("    Engine was not de-energized after waiting for 10sec. Check engine.");
+                    }
                     digitalWrite(O_ENGINE_DISCHARGE, LOW);
+                    gpio_intr_enable(static_cast<gpio_num_t>(I_CONTROLBOARD_DETECT));
+                        // re-enable interrupt
                 }
                 else
                 {
@@ -355,6 +369,11 @@ void Controller::input_runner(void* args)
                         vTaskDelay(10); 
                     }
                     while (!_this->_is_energized && loop_break_counter < 1000);
+                    if(_this->_is_energized) Logger.Info("    Engine is now energized.");
+                    else
+                    {
+                        Logger.Error("    Engine was not energized after waiting for 10sec. Check engine.");
+                    }
                 }
                 _this->_toggle_energize = false;
             }
