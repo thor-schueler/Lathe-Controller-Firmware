@@ -115,6 +115,22 @@ void Controller_Display::update_power_state(bool powered)
 }
 
 /**
+ * @brief Updates the warning area.
+ * @param has_deferred_action - True if a deferred action is pending, false otherwise.
+ */
+void Controller_Display::update_warning(bool has_deferred_action)
+{
+  if(has_deferred_action)
+  {
+    draw_image(warning_pending_engine, warning_pending_engine_size, warning_x, warning_y, warning_w, warning_h);
+  }
+  else
+  {
+    draw_image(warning_off, warning_off_size, warning_x, warning_y, warning_w, warning_h);
+  }
+}
+
+/**
  * @brief Writes emergency indicator to the display
 */
 void Controller_Display::write_emergency()

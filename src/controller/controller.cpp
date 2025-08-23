@@ -71,9 +71,9 @@ Controller::Controller()
     attachInterrupt(digitalPinToInterrupt(I_LUBE), std::bind(&Controller::handle_input, this), CHANGE);
     attachInterrupt(digitalPinToInterrupt(I_BACKLIGHT), std::bind(&Controller::handle_input, this), CHANGE);
     attachInterrupt(digitalPinToInterrupt(I_ENERGIZE), std::bind(&Controller::handle_energize, this), FALLING);    
-    attachInterrupt(digitalPinToInterrupt(I_CONTROLBOARD_DETECT), std::bind(&Controller::handle_input, this), FALLING);
-        // we only process falling here as an interrupt as the control board might shut off 
-        // due to overload and we need to be informed of that. All rising is initiated by us, so 
+    attachInterrupt(digitalPinToInterrupt(I_CONTROLBOARD_DETECT), std::bind(&Controller::handle_input, this), RISING);
+        // we only process rising (the signal is inverted) here as an interrupt as the control board might shut off 
+        // due to overload and we need to be informed of that. All falling is initiated by us, so 
         // we do not need an interrupt for that. 
 
     if(USE_POLLING_FOR_RPM)
@@ -103,21 +103,40 @@ Controller::Controller()
     Logger.Info("....Initializing Input Values");  
     _main_power = digitalRead(I_MAIN_POWER);
     _has_emergency = digitalRead(I_EMS);
-    _toggle_energize = digitalRead(I_ENERGIZE) == LOW;
+    _toggle_energize = !digitalRead(I_ENERGIZE);
     _for_f = digitalRead(I_FOR_F);
     _for_b = digitalRead(I_FOR_B);
     _light = digitalRead(I_LIGHT);
     _backlight = digitalRead(I_BACKLIGHT);
     _lube = digitalRead(I_LUBE);
-    _is_energized = digitalRead(I_CONTROLBOARD_DETECT);
+    _is_energized = !digitalRead(I_CONTROLBOARD_DETECT);
+    if(_for_f)
+    {
+        this->_direction_a.desired = false;
+        this->_direction_b.desired = false;
+        this->_common.desired = true;
+    }
+    else if(_for_b)
+    {
+        this->_direction_a.desired = true;
+        this->_direction_b.desired = true;
+        this->_common.desired = true;
+    }
+    else
+    {
+        this->_direction_a.desired = false;
+        this->_direction_b.desired = false;
+        this->_common.desired = false;        
+    }
     Logger.Info_f(F("         Main Power: %s"), _main_power ? "Off" : "On");
+    Logger.Info_f(F("         Energize Toggled: %s"), _toggle_energize ? "Yes" : "No");
     Logger.Info_f(F("         Emergency Shutdown: %s"), _has_emergency ? "On" : "Off");
     Logger.Info_f(F("         Forward Selector: %s"), _for_f ? "On" : "Off");      
     Logger.Info_f(F("         Backward Selector: %s"), _for_b ? "On" : "Off");    
     Logger.Info_f(F("         Light: %s"), _light ? "Off" : "On");
     Logger.Info_f(F("         Backlight: %s"), _backlight ? "On" : "Off");  
     Logger.Info_f(F("         Lube: %s"), _lube ? "Off" : "On");
-    Logger.Info_f(F("         Energized: %s"), _is_energized ? "Hot" : "Cold");
+    Logger.Info_f(F("         Energized: %s"), _is_energized ? "HOT" : "COLD");
 
     Logger.Info(F("....Generating Mutexes"));
     _display_mutex = xSemaphoreCreateBinary();  xSemaphoreGive(_display_mutex);
@@ -183,6 +202,7 @@ void Controller::display_runner(void* args)
     bool old_power = false;
     bool old_engine = false;
     bool had_emergency = false;
+    bool had_deferred_action = false;
     bool is_first = true;
     unsigned int old_rpm = 0;
     Controller *_this = reinterpret_cast<Controller *>(args);
@@ -236,6 +256,13 @@ void Controller::display_runner(void* args)
 
                 // update lube state
                 _this->_display->update_lube_state(_this->_lube);
+
+                if(had_deferred_action != _this->_has_deferred_action)
+                {
+                    // update warning area
+                    _this->_display->update_warning(_this->_has_deferred_action);
+                    had_deferred_action = _this->_has_deferred_action;
+                }
             }
             xSemaphoreGive(_this->_display_mutex);
         }
@@ -252,6 +279,8 @@ void Controller::display_runner(void* args)
  */
 void Controller::input_runner(void* args)
 {
+    static int index = 0;
+    bool external_power_loss = false;
     Controller *_this = reinterpret_cast<Controller *>(args);
     for (;;) 
     { 
@@ -261,6 +290,10 @@ void Controller::input_runner(void* args)
         // read input states
         //
         vTaskDelay(pdMS_TO_TICKS(DEBOUNCE_MS));
+        _this->_direction_a.reported = digitalRead(O_SPINDLE_DIRECTION_SWITCH_A);
+        _this->_direction_b.reported = digitalRead(O_SPINDLE_DIRECTION_SWITCH_B);
+        _this->_common.reported = digitalRead(O_SPINDLE_OFF);
+        _this->_deenergize.reported = digitalRead(O_ENGINE_DISCHARGE);
         if(digitalRead(I_MAIN_POWER) != _this->_main_power) 
         {
             _this->_main_power = !_this->_main_power;
@@ -288,25 +321,52 @@ void Controller::input_runner(void* args)
             _this->_lube = !_this->_lube;
             Logger.Info_f(F("Lubrication toggled: %s"), _this->_lube ? "Off" : "On");
         }
-        if(digitalRead(I_FOR_F) != _this->_for_f) 
+        if(digitalRead(I_FOR_F))
         {
-            _this->_for_f = !_this->_for_f;
-             _this->_direction_a.desired = _this->_for_f;
-             should_print = true;
-            Logger.Info_f(F("Forward Direction changed to: %s"), _this->_for_f ? "On" : "Off");
+            _this->_for_f = true;
+            _this->_for_b = false;
+            _this->_direction_a.desired = false;
+            _this->_direction_b.desired = false;
+            _this->_common.desired = true;
+            if(_this->_direction_a.reported != false || _this->_direction_b.reported != false || _this->_common.reported != true)
+            {
+                should_print = true;
+                Logger.Info(F("Direction changed to: Forward"));
+            }
         }
-        if(digitalRead(I_FOR_B) != _this->_for_b) 
+        else if(digitalRead(I_FOR_B))
         {
-            _this->_for_b = !_this->_for_b;
-            _this->_direction_b.desired = _this->_for_b;
-            should_print = true;
-            Logger.Info_f(F("Backward Direction changed to: %s"), _this->_for_b ? "On" : "Off");
+            _this->_for_f = false;
+            _this->_for_b = true;
+            _this->_direction_a.desired = true;
+            _this->_direction_b.desired = true;
+            _this->_common.desired = true;
+            if(_this->_direction_a.reported != true || _this->_direction_b.reported != true || _this->_common.reported != true)
+            {
+                should_print = true;
+                Logger.Info(F("Direction changed to: Backward"));
+            }
         }
-        if(digitalRead(I_CONTROLBOARD_DETECT) != _this->_is_energized) 
+        else
         {
-            _this->_is_energized = !_this->_is_energized;
-            should_print = true;
-            Logger.Info_f(F("Engine power: %s"), _this->_is_energized ? "Hot" : "Cold");
+            _this->_for_f = false;
+            _this->_for_b = false;
+            _this->_direction_a.desired = false;
+            _this->_direction_b.desired = false;
+            _this->_common.desired = false;
+            if(_this->_direction_a.reported != false || _this->_direction_b.reported != false || _this->_common.reported != false)
+            {
+                should_print = true;
+                Logger.Info(F("Direction changed to: Neutral"));
+            }
+        }
+        if(digitalRead(I_CONTROLBOARD_DETECT) == HIGH && !_this->_toggle_energize && _this->_is_energized)
+        {
+            // if we read high here, than there is no voltage on the control board. If this happens without 
+            // _toggle_energize being true while _is_energized, then the board has shutdown power basd on current or voltage
+            // draw. So we need to "fake" de-energizing...  
+            external_power_loss = true;
+            Logger.Info(F("Received control board power loss trigger: Shutting down..."));
         }
 
         //
@@ -315,68 +375,126 @@ void Controller::input_runner(void* args)
         _this->_common.desired = (!_this->_for_b && !_this->_for_f) ? false : true;
         if(!_this->_has_emergency)
         {
-            if(!_this->_is_energized)
-            {
-                digitalWrite(O_ENGINE_DISCHARGE, LOW);
-                if(_this->_for_f)
-                {
-                    digitalWrite(O_SPINDLE_DIRECTION_SWITCH_A, LOW);
-                    digitalWrite(O_SPINDLE_DIRECTION_SWITCH_B, LOW);
-                    _this->_direction_b.desired = false;
-                    _this->_for_b = false;
-                }
-                if(_this->_for_b)
-                {
-                    digitalWrite(O_SPINDLE_DIRECTION_SWITCH_A, HIGH);
-                    digitalWrite(O_SPINDLE_DIRECTION_SWITCH_B, HIGH);
-                    _this->_direction_a.desired = false;
-                    _this->_for_f = false;
-                }            
-                if(_this->_common.desired != _this->_common.reported) digitalWrite(O_SPINDLE_OFF, _this->_common.desired);            
-            }
-
             if(_this->_toggle_energize)
             {
-                unsigned int loop_break_counter = 0;
-                if(_this->_is_energized)
-                {
-                    Logger.Info_f("    De-Energizing engine...");
-                    gpio_intr_disable(static_cast<gpio_num_t>(I_CONTROLBOARD_DETECT));  
-                        // temporarily disable interrupt to prevent double processing
-                    digitalWrite(O_ENGINE_DISCHARGE, HIGH);
-                    do { 
-                        _this->_is_energized = digitalRead(I_CONTROLBOARD_DETECT); 
-                        loop_break_counter++;
-                        vTaskDelay(10);
-                    }
-                    while (_this->_is_energized && loop_break_counter < 1000);
-                    if(!_this->_is_energized) Logger.Info("    Engine is now de-energized.");
-                    else
-                    {
-                        Logger.Error("    Engine was not de-energized after waiting for 10sec. Check engine.");
-                    }
-                    digitalWrite(O_ENGINE_DISCHARGE, LOW);
-                    gpio_intr_enable(static_cast<gpio_num_t>(I_CONTROLBOARD_DETECT));
-                        // re-enable interrupt
-                }
-                else
-                {
-                    Logger.Info_f("    Energizing engine...");
-                    do { 
-                        // power on happens on the motor control board, we just wait until we read the voltage
-                        _this->_is_energized = digitalRead(I_CONTROLBOARD_DETECT);
-                        loop_break_counter++;
-                        vTaskDelay(10); 
-                    }
-                    while (!_this->_is_energized && loop_break_counter < 1000);
-                    if(_this->_is_energized) Logger.Info("    Engine is now energized.");
-                    else
-                    {
-                        Logger.Error("    Engine was not energized after waiting for 10sec. Check engine.");
-                    }
-                }
                 _this->_toggle_energize = false;
+                if(!_this->_main_power)
+                {
+                    unsigned int loop_break_counter = 0;
+                    unsigned int stabilization_counter = 0;
+                    byte reg = 0x0;
+
+                    gpio_intr_disable(static_cast<gpio_num_t>(I_ENERGIZE));
+                        // disable the interrupt during processing as there might be a lot of noise 
+                        // coming on that pin during startup/shutdown.
+
+                    do{
+                        bool val = !digitalRead(I_ENERGIZE);            // I_ENERGIZE reads low if the button us pressed
+                        reg = reg << 1;                                 // left shift register
+                        reg |= val ?  1 << 0 : 0 << 0;                  // set least signifcant bit based on read value
+                        stabilization_counter++;
+                        vTaskDelay(pdMS_TO_TICKS(20));              
+                    }
+                    while(reg != 0xff && stabilization_counter < 40);
+                        // delay any action until the button press on Energize is released
+                        // we wait for eight subsequent readings of High before we move on 
+                        // do make sure we are not being hit by bounce.  
+                    if(stabilization_counter < 40)
+                    {
+                        if(_this->_is_energized)
+                        {
+                            Logger.Info_f("    De-Energizing engine...");
+                            gpio_intr_disable(static_cast<gpio_num_t>(I_CONTROLBOARD_DETECT));  
+                                // temporarily disable interrupt to prevent double processing
+                            digitalWrite(O_ENGINE_DISCHARGE, HIGH);
+                            do { 
+                                _this->_is_energized = !digitalRead(I_CONTROLBOARD_DETECT); 
+                                loop_break_counter++;
+                                vTaskDelay(10);
+                            }
+                            while (_this->_is_energized && loop_break_counter < 1000);
+                            if(!_this->_is_energized) Logger.Info("    Engine is now de-energized.");
+                            else
+                            {
+                                Logger.Error("    Engine was not de-energized after waiting for 10sec. Check engine.");
+                            }
+                            digitalWrite(O_ENGINE_DISCHARGE, LOW);
+                            vTaskDelay(pdMS_TO_TICKS(250));
+                            gpio_intr_enable(static_cast<gpio_num_t>(I_CONTROLBOARD_DETECT));
+                                // re-enable interrupt
+                        }
+                        else
+                        {
+                            Logger.Info_f("    Energizing engine...");
+                            do { 
+                                // power on happens on the motor control board, we just wait until we read the voltage
+                                _this->_is_energized = !digitalRead(I_CONTROLBOARD_DETECT);
+                                loop_break_counter++;
+                                vTaskDelay(10); 
+                            }
+                            while (!_this->_is_energized && loop_break_counter < 1000);
+                            if(_this->_is_energized) Logger.Info("    Engine is now energized.");
+                            else
+                            {
+                                Logger.Error("    Engine was not energized after waiting for 10sec. Check engine.");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Logger.Info(F("Could not obtain stable reading on I_ENERGIZE. Cancelling transaction without change."));
+                        if(!_this->_is_energized && digitalRead(I_CONTROLBOARD_DETECT) == LOW)
+                        {
+                            digitalWrite(O_ENGINE_DISCHARGE, HIGH);
+                            vTaskDelay(pdMS_TO_TICKS(250));
+                            digitalWrite(O_ENGINE_DISCHARGE, LOW);
+                        }
+                    }
+                    gpio_intr_enable(static_cast<gpio_num_t>(I_ENERGIZE));
+                }
             }
+        
+            if(external_power_loss)
+            {
+                unsigned int loop_break_counter = 0;
+                Logger.Info(F("Responding to control board power loss trigger."));
+                do { 
+                    _this->_is_energized = !digitalRead(I_CONTROLBOARD_DETECT); 
+                    loop_break_counter++;
+                    vTaskDelay(10);
+                }
+                while (_this->_is_energized && loop_break_counter < 1000);
+                    // confirm control board is indeed de-energized.
+                external_power_loss = false;
+            }
+
+            if(!_this->_is_energized)
+            {
+                gpio_intr_disable(static_cast<gpio_num_t>(I_ENERGIZE));  
+                                // temporarily disable interrupt to prevent induction lead processing
+                digitalWrite(O_ENGINE_DISCHARGE, LOW);        
+                if(_this->_direction_a.desired != _this->_direction_a.reported) { digitalWrite(O_SPINDLE_DIRECTION_SWITCH_A, _this->_direction_a.desired); should_print = true; }
+                if(_this->_direction_b.desired != _this->_direction_b.reported) { digitalWrite(O_SPINDLE_DIRECTION_SWITCH_B, _this->_direction_b.desired); should_print = true; }
+                if(_this->_common.desired != _this->_common.reported) { digitalWrite(O_SPINDLE_OFF, _this->_common.desired); should_print = true; }
+                _this->_direction_a.reported = digitalRead(O_SPINDLE_DIRECTION_SWITCH_A);
+                _this->_direction_b.reported = digitalRead(O_SPINDLE_DIRECTION_SWITCH_B);
+                _this->_common.reported = digitalRead(O_SPINDLE_OFF);
+                _this->_deenergize.reported = digitalRead(O_ENGINE_DISCHARGE);
+                _this->_has_deferred_action = false;
+                vTaskDelay(pdMS_TO_TICKS(250));
+                gpio_intr_enable(static_cast<gpio_num_t>(I_ENERGIZE));
+            }
+            else
+            {
+                if(_this->_direction_a.desired != _this->_direction_a.reported) _this->_has_deferred_action = true;
+                if(_this->_direction_b.desired != _this->_direction_b.reported) _this->_has_deferred_action = true;
+                if(_this->_common.desired != _this->_common.reported) _this->_has_deferred_action = true;
+                if(_this->_has_deferred_action)
+                {
+                    Logger.Info(F("Deferring Direction change due to engine lockout. Change will take place next time spindle if off."));
+                    should_print = false;
+                }
+            }    
         }
         else
         {
@@ -443,8 +561,12 @@ void Controller::calculate_rpm()
         int idx = (this->_pulse_index - i - 1 + MAX_RPM_PULSES) % MAX_RPM_PULSES;
         if (micros() - this->_pulse_times[idx] <= MAX_RPM_AGE_US) validTimes[validCount++] = this->_pulse_times[idx];
     }
-    if (validCount < 2) return;
+    if (validCount < 2) 
+    {
         // we need at least two pulses to calculate RPMs.
+        this->_rpm = 0;
+        return;
+    }
 
     // Calculate average delta
     for (int i = 1; i < validCount; i++) sum += validTimes[i - 1] - validTimes[i];
@@ -496,11 +618,12 @@ void IRAM_ATTR Controller::read_hall_sensor(void *arg)
  */
 void IRAM_ATTR Controller::handle_energize()
 {
+    static unsigned long last_toggle_energize = 0;
     unsigned long currentTime = millis();
-    if (currentTime - this->_last_toggle_energize > DEBOUNCE_MS) 
+    if (currentTime - last_toggle_energize > DEBOUNCE_MS) 
     {
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-        this->_last_toggle_energize = currentTime;
+        last_toggle_energize = currentTime;
         this->_toggle_energize = true;
         vTaskNotifyGiveFromISR(this->_input_runner, &xHigherPriorityTaskWoken); 
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
@@ -512,11 +635,12 @@ void IRAM_ATTR Controller::handle_energize()
  */
 void IRAM_ATTR Controller::handle_input()
 {
+    static unsigned long last_input_change = 0;    
     unsigned long currentTime = millis();
-    if (currentTime - this->_last_input_change > DEBOUNCE_MS) 
+    if (currentTime - last_input_change > DEBOUNCE_MS) 
     {
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-        this->_last_input_change = currentTime;
+        last_input_change = currentTime;
         vTaskNotifyGiveFromISR(this->_input_runner, &xHigherPriorityTaskWoken); 
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
@@ -527,11 +651,12 @@ void IRAM_ATTR Controller::handle_input()
  */
 void IRAM_ATTR Controller::handle_spindle_pulse()
 {    
+    static unsigned long hall_debounce_tick = 0;
     portENTER_CRITICAL_ISR(&_hall_mux);
     uint64_t now = esp_timer_get_time();
-    if(now - this->_hall_debounce_tick > HALL_DEBOUNCE_DELAY_US)
+    if(now - hall_debounce_tick > HALL_DEBOUNCE_DELAY_US)
     {
-        this->_hall_debounce_tick = now;
+        hall_debounce_tick = now;
         this->_pulse_times[this->_pulse_index % MAX_RPM_PULSES] = micros();
         this->_pulse_index++;
     }

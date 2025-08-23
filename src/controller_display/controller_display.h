@@ -40,6 +40,15 @@ extern const unsigned int forward_h;
 extern const size_t forward_on_size;
 extern const size_t forward_off_size;
 
+extern const unsigned char warning_off[] PROGMEM;
+extern const unsigned char warning_pending_engine[] PROGMEM;
+extern const unsigned int warning_x;
+extern const unsigned int warning_y;
+extern const unsigned int warning_w;
+extern const unsigned int warning_h;
+extern const size_t warning_off_size;
+extern const size_t warning_pending_engine_size;
+
 extern const unsigned char neutral_on[] PROGMEM;
 extern const unsigned char neutral_off[] PROGMEM;
 extern const unsigned int neutral_x;
@@ -155,6 +164,12 @@ class Controller_Display:public DISPLAY_SPI
 		 * @param energized - True if state it powered, false otherwise.
 		*/
 		void update_power_state(bool powered);
+
+		/**
+		 * @brief Updates the warning area.
+		 * @param has_deferred_action - True if a deferred action is pending, false otherwise.
+		 */
+		void update_warning(bool has_deferred_action);
 
 		/**
 		 * @brief Writes emergency indicator to the disaply

@@ -27,7 +27,7 @@
 
 #define HALL_DEBOUNCE_DELAY_US 50
 #define HALL_POLLING_INTERVAL_US 50
-#define USE_POLLING_FOR_RPM false
+#define USE_POLLING_FOR_RPM true
     // this define controls whether we use polling on a timer or interrupts for RPM measurement. 
     // while interrupt drive is preferable, there seem to be a lot of phantom interrupts on low RPMs
     // probably because the slow takeup edge on the hall. We might be able to reduce the capacitor 
@@ -143,15 +143,13 @@ class Controller
         volatile bool _is_energized = false;
         volatile bool _backlight = false;
         volatile bool _lube = false;
+        volatile bool _has_deferred_action = false;
 
         volatile State _direction_a;
         volatile State _direction_b;
         volatile State _common;
         volatile State _deenergize;
-
-        unsigned long _last_toggle_energize = 0;
-        unsigned long _last_input_change = 0;
-        unsigned long _hall_debounce_tick = 0;
+        
         volatile unsigned int _pulse_times[MAX_RPM_PULSES];
         volatile int _pulse_index = 0;
         unsigned int _rpm = 0;
