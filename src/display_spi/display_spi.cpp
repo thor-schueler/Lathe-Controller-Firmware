@@ -72,12 +72,14 @@ uint16_t DISPLAY_SPI::RGB_to_565(uint8_t r, uint8_t g, uint8_t b)
  */
 void DISPLAY_SPI::draw_background(const unsigned char* image, size_t size)
 {
+  SPI_BEGIN_TRANSACTION();
 	CS_ACTIVE;
 	set_addr_window(0, 0, width, height);
 	writeCommand(ILI9341_MEMORYWRITE);
 	CD_DATA;
 	spi->transferBytes(image, nullptr, size);
 	CS_IDLE;
+  SPI_END_TRANSACTION();
 }
 
 /**
@@ -91,12 +93,14 @@ void DISPLAY_SPI::draw_background(const unsigned char* image, size_t size)
  */
 void DISPLAY_SPI::draw_image(const unsigned char* image, size_t size, uint16_t x, uint16_t y, uint16_t w, uint16_t h)
 {
+  SPI_BEGIN_TRANSACTION();
 	CS_ACTIVE;
 	set_addr_window(x, y, w, h);
 	writeCommand(ILI9341_MEMORYWRITE);
 	CD_DATA;
 	spi->transferBytes(image, nullptr, size);
 	CS_IDLE;
+  SPI_END_TRANSACTION();
 }
 
 /**
@@ -110,23 +114,45 @@ void DISPLAY_SPI::draw_pixel(int16_t x, int16_t y, uint16_t color)
   // Clip first...
   if ((x >= 0) && (x < width) && (y >= 0) && (y < height)) {
     // THEN set up transaction (if needed) and draw...
-    startWrite();
+    START_WRITE();
     set_addr_window(x, y, 1, 1);
     SPI_WRITE16(color);
-    endWrite();
+    END_WRITE();
   }
 }
 
+/**
+ * @brief Draws a horizontal line on the screen
+ * @param x - x coordinate of the start
+ * @param y - y coordinate of the start
+ * @param w - the width of the line
+ * @param color - the color to set
+ */
 void DISPLAY_SPI::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) 
 {
   drawLine(x, y, x+w-1, y, color);
 }
-
+		
+/**
+ * @brief Draws a vertical line on the screen
+ * @param x - x coordinate of the start
+ * @param y - y coordinate of the start
+ * @param w - the height of the line
+ * @param color - the color to set
+ */
 void DISPLAY_SPI::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) 
 {
   drawLine(x, y, x, y+h-1, color);
 }
 
+/**
+ * @brief Draws a vertical line on the screen
+ * @param x - x coordinate of the start
+ * @param y - y coordinate of the start
+ * @param x1 - x coordinate of the end
+ * @param y1 - y coordinate of the end
+ * @param color - the color to set
+ */
 void DISPLAY_SPI::drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t color) 
 {
   int16_t steep = abs(y1 - y0) > abs(x1 - x0);
@@ -167,7 +193,6 @@ void DISPLAY_SPI::drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint1
   }
 }
 
-
 /**
  * @brief Fill area from x to x+w, y to y+h
  * @param x - x Coordinate
@@ -183,13 +208,17 @@ void DISPLAY_SPI::fill_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t
   }
 }
 
+/**
+ * @brief Fills the screen with a color
+ * @param color - the color to fill the screen with
+ */
 void DISPLAY_SPI::fillScreen(uint16_t color) 
 {
   fill_rect(0, 0, width, height, color);
 }
 
 /**
- * @brief Gets teh display height
+ * @brief Gets the display height
  * @returns The display height
  */
 int16_t DISPLAY_SPI::get_height() const
@@ -230,7 +259,7 @@ void DISPLAY_SPI::init()
 	CS_IDLE;
 	CD_DATA;
 	
-	spi_settings = SPISettings(20000000, MSBFIRST, SPI_MODE0);
+	spi_settings = SPISettings(SPI_BUS_FREQUENCY, MSBFIRST, SPI_MODE0);
   spi = new SPIClass(HSPI);
   spi->begin(SCK, -1, SID, CS);
 	  // explicitely pass the PINs since we need to avoid the assignment of the MISO pin as 
@@ -375,11 +404,11 @@ void DISPLAY_SPI::sendCommand(uint8_t commandByte, const uint8_t *dataBytes, uin
     SPI_CS_LOW();
 
   SPI_DC_LOW();          // Command mode
-  spiWrite(commandByte); // Send the command byte
+  SPI_WRITE(commandByte); // Send the command byte
 
   SPI_DC_HIGH();
   for (int i = 0; i < numDataBytes; i++) {
-      spiWrite(*dataBytes); // Send the data bytes
+      SPI_WRITE(*dataBytes); // Send the data bytes
       dataBytes++;
   }
 
@@ -396,9 +425,10 @@ void DISPLAY_SPI::sendCommand(uint8_t commandByte, const uint8_t *dataBytes, uin
             function -- just use spiWrite().
     @param  cmd  8-bit command to write.
 */
-void DISPLAY_SPI::writeCommand(uint8_t cmd) {
+void DISPLAY_SPI::writeCommand(uint8_t cmd) 
+{
   SPI_DC_LOW();
-  spiWrite(cmd);
+  SPI_WRITE(cmd);
   SPI_DC_HIGH();
 }
 

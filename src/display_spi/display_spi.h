@@ -75,8 +75,32 @@ class DISPLAY_SPI
 		 */
 		void draw_pixel(int16_t x, int16_t y, uint16_t color);
 
-		void drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color); 
+		/**
+		 * @brief Draws a horizontal line on the screen
+		 * @param x - x coordinate of the start
+		 * @param y - y coordinate of the start
+		 * @param w - the width of the line
+		 * @param color - the color to set
+		 */
+		void drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color);
+		
+		/**
+		 * @brief Draws a vertical line on the screen
+		 * @param x - x coordinate of the start
+		 * @param y - y coordinate of the start
+		 * @param w - the height of the line
+		 * @param color - the color to set
+		 */
 		void drawFastVLine(int16_t x, int16_t y, int16_t w, uint16_t color); 
+
+		/**
+		 * @brief Draws a vertical line on the screen
+		 * @param x - x coordinate of the start
+		 * @param y - y coordinate of the start
+		 * @param x1 - x coordinate of the end
+		 * @param y1 - y coordinate of the end
+		 * @param color - the color to set
+		 */
 		void drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t color); 
 
 		/**
@@ -89,6 +113,10 @@ class DISPLAY_SPI
 		 */
 		void fill_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
 
+		/**
+		 * @brief Fills the screen with a color
+		 * @param color - the color to fill the screen with
+		 */
 		void fillScreen(uint16_t color); 
 
 		/**
@@ -176,10 +204,10 @@ class DISPLAY_SPI
 		inline void SPI_CS_HIGH(void) { digitalWrite(CS, HIGH); };
 		inline void SPI_DC_LOW(void) { digitalWrite(RS, LOW); };
 		inline void SPI_DC_HIGH(void) { digitalWrite(RS, HIGH); };
-		inline void spiWrite(uint8_t b) {spi->write(b); };
+		inline void SPI_WRITE(uint8_t b) {spi->write(b); };
 		inline void SPI_WRITE16(uint16_t u) {spi->write16(u); };
-		inline void startWrite(void) { SPI_BEGIN_TRANSACTION(); SPI_CS_LOW(); };
-		inline void endWrite(void) { SPI_CS_HIGH(); SPI_END_TRANSACTION(); };
+		inline void START_WRITE(void) { SPI_BEGIN_TRANSACTION(); SPI_CS_LOW(); };
+		inline void END_WRITE(void) { SPI_CS_HIGH(); SPI_END_TRANSACTION(); };
 
 		void writeCommand(uint8_t cmd);
 
