@@ -231,9 +231,9 @@ void DISPLAY_SPI::init()
 	CD_DATA;
 	
 	spi_settings = SPISettings(20000000, MSBFIRST, SPI_MODE0);
-  	spi = new SPIClass(HSPI);
-  	spi->begin(SCK, -1, SID, CS);
-		// explicitely pass the PINs since we need to avoid the assignment of the MISO pin as 
+  spi = new SPIClass(HSPI);
+  spi->begin(SCK, -1, SID, CS);
+	  // explicitely pass the PINs since we need to avoid the assignment of the MISO pin as 
 		// this pin is required elsewhere.
 	if(RESET > 0) pinMode(RESET, OUTPUT);
 	if(LED > 0)
