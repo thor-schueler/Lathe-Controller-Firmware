@@ -21,8 +21,7 @@
 #include "src/logging/SerialLogger.h"
 #include "src/controller/controller.h"
 
-#define VERSION "0.00.00"
-#define TELEMETRY_FREQUENCY_MILLISECS 120000
+#define VERSION "0.99.00"
 
 #ifdef SET_LOOP_TASK_STACK_SIZE
 SET_LOOP_TASK_STACK_SIZE(16384);
