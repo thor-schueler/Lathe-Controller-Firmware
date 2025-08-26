@@ -6,8 +6,12 @@
 
 #include <Arduino.h>
 #include "../controller_display/controller_display.h"
+extern "C" {
+  #include <driver/timer.h>
+}
 
-#define DEBOUNCE_MS 150
+#define DEBOUNCE_US 150000
+#define DEBOUNCE_MS DEBOUNCE_US/1000
 
 #define I_MAIN_POWER 4
 #define I_EMS 34
@@ -25,9 +29,16 @@
 #define O_SPINDLE_OFF 5
 #define O_ENGINE_DISCHARGE 21
 
+
+#define TIMER_GROUP    TIMER_GROUP_0
+#define TIMER_RPM      TIMER_0
+#define TIMER_COUNTER  TIMER_1
+#define TIMER_DIVIDER  80  
+    // 80 MHz / 80 = 1 MHz → 1 tick = 1 µs
+
 #define HALL_DEBOUNCE_DELAY_US 10
-#define HALL_POLLING_INTERVAL_US 10
-#define USE_POLLING_FOR_RPM true
+#define HALL_POLLING_INTERVAL_US 25
+#define USE_POLLING_FOR_RPM false
     // this define controls whether we use polling on a timer or interrupts for RPM measurement. 
     // while interrupt drive is preferable, there seem to be a lot of phantom interrupts on low RPMs
     // probably because the slow takeup edge on the hall. We might be able to reduce the capacitor 
@@ -43,7 +54,8 @@
                                 // give smoother RPM evolution, closer to 1 will be more responsive but
                                 // also more jittery 
 #define MIN_RPM_DELTA 10        // Minimum change to update display
-#define RPM_CALCULATION_INTERVAL 50
+#define RPM_CALCULATION_INTERVAL 100
+#define DISPLAY_REFRESH 100
 
 
 /**
@@ -71,8 +83,8 @@ class Controller
          */
         ~Controller();
 
-        volatile unsigned long _pulse_times[MAX_RPM_PULSES];
-        volatile unsigned long _pulse_index = 0;
+        volatile uint64_t _pulse_times[MAX_RPM_PULSES];
+        volatile uint64_t _pulse_index = 0;
 
     protected:
 
@@ -99,7 +111,7 @@ class Controller
          *
          * @param arg pointer to class instance context (this)
          */
-        static void IRAM_ATTR read_hall_sensor(void *arg);
+        static bool IRAM_ATTR read_hall_sensor(void *arg);
 
         /**
          * @brief Event handler watching for changes on the energize button toggle.
@@ -157,7 +169,7 @@ class Controller
         unsigned int _rpm = 0;
 
         SemaphoreHandle_t _display_mutex;
-        esp_timer_handle_t _hall_timer_handle = NULL;        
+        //esp_timer_handle_t _hall_timer_handle = NULL;        
 };
 
 #endif

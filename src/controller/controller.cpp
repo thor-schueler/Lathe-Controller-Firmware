@@ -29,6 +29,11 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "controller.h"
 #include "../logging/SerialLogger.h"
 #include <portmacro.h>
+extern "C" {
+  #include <driver/timer.h>
+  #include <soc/gpio_struct.h>
+}
+
 
 portMUX_TYPE _hall_mux = portMUX_INITIALIZER_UNLOCKED;
 static Controller *_instance = nullptr;
@@ -76,17 +81,36 @@ Controller::Controller()
         // due to overload and we need to be informed of that. All falling is initiated by us, so 
         // we do not need an interrupt for that. 
 
+    Logger.Info("....Initializing counter timer");    
+    timer_config_t cnt_config = 
+    {
+        .alarm_en = TIMER_ALARM_DIS,
+        .counter_en = TIMER_PAUSE,
+        .counter_dir = TIMER_COUNT_UP,
+        .auto_reload = TIMER_AUTORELOAD_DIS,
+        .divider = TIMER_DIVIDER,
+    };
+    timer_init(TIMER_GROUP, TIMER_COUNTER, &cnt_config);
+    timer_set_counter_value(TIMER_GROUP, TIMER_COUNTER, 0);
+    timer_start(TIMER_GROUP, TIMER_COUNTER);
+
     if(USE_POLLING_FOR_RPM)
     {
         Logger.Info(F("     Not using interrupt for RPM sensing. Instead create RPM sample timer"));
-        const esp_timer_create_args_t ta = {
-            .callback = read_hall_sensor,
-            .arg = this,
-            .name = "rmp sensing",
-            .skip_unhandled_events = true
-        }; 
-        esp_timer_create(&ta, &this->_hall_timer_handle);
-        esp_timer_start_periodic(this->_hall_timer_handle, HALL_POLLING_INTERVAL_US);
+        timer_config_t rpm_config = 
+        {
+            .alarm_en = TIMER_ALARM_EN,
+            .counter_en = TIMER_PAUSE,
+            .counter_dir = TIMER_COUNT_UP,
+            .auto_reload = TIMER_AUTORELOAD_EN,
+            .divider = TIMER_DIVIDER,
+        };
+        timer_init(TIMER_GROUP, TIMER_RPM, &rpm_config);
+        timer_set_counter_value(TIMER_GROUP, TIMER_RPM, 0);
+        timer_set_alarm_value(TIMER_GROUP, TIMER_RPM, HALL_POLLING_INTERVAL_US);
+        timer_enable_intr(TIMER_GROUP, TIMER_RPM);
+        timer_isr_callback_add(TIMER_GROUP, TIMER_RPM, Controller::read_hall_sensor, this, ESP_INTR_FLAG_IRAM);
+        timer_start(TIMER_GROUP, TIMER_RPM);
     }
     else
     {
@@ -165,14 +189,17 @@ Controller::~Controller()
     this->_input_runner = NULL;
     this->_rpm_runner = NULL;
 
+    Logger.Info(F("     Remove Counter timer"));
+    timer_pause(TIMER_GROUP, TIMER_COUNTER);
+    timer_set_counter_value(TIMER_GROUP, TIMER_COUNTER, 0);
+
     if(USE_POLLING_FOR_RPM)
     {
         Logger.Info(F("     Remove RPM timer"));
-        if(this->_hall_timer_handle != NULL)
-        {
-            if(esp_timer_is_active(this->_hall_timer_handle)) esp_timer_stop(this->_hall_timer_handle);
-            esp_timer_delete(this->_hall_timer_handle);
-        }
+        timer_pause(TIMER_GROUP, TIMER_RPM);
+        timer_disable_intr(TIMER_GROUP, TIMER_RPM);
+        timer_set_counter_value(TIMER_GROUP, TIMER_RPM, 0);
+        timer_set_alarm_value(TIMER_GROUP, TIMER_RPM, 0);
     }
     else
     {
@@ -199,13 +226,20 @@ Controller::~Controller()
  */
 void Controller::display_runner(void* args)
 {
-    bool old_power = false;
-    bool old_engine = false;
-    bool had_emergency = false;
-    bool had_deferred_action = false;
-    bool is_first = true;
-    unsigned int old_rpm = 0;
     Controller *_this = reinterpret_cast<Controller *>(args);
+    unsigned int rpm = 0;
+    word state = 0b1000000000000000;
+        //         |      ||||||||+---- had_emergency
+        //         |      |||||||+----- power state
+        //         |      ||||||+------ engine energized state
+        //         |      |||||+------- for_f state
+        //         |      ||||+-------- for_b state
+        //         |      |||+--------- light state
+        //         |      ||+---------- backlight state
+        //         |      |+----------- lube state 
+        //         |      +------------ has deferred action
+        //         +------------------- is first
+
     for (;;) 
     { 
         if (xSemaphoreTake(_this->_display_mutex, portMAX_DELAY) == pdTRUE) 
@@ -214,26 +248,26 @@ void Controller::display_runner(void* args)
             {
                 // draw emergency shutdown screen
                 _this->_display->write_emergency();
-                had_emergency = true;
+                state |= (1 << 0);
             }
             else
             {
-                if(had_emergency || is_first)
+                if(((state >> 0) & 0x1) || ((state >> 15) & 0x1))
                 {
                     //restore display background after emergency
                     _this->_display->update_background();
-                    had_emergency = false;
-                    is_first = true;
+                    state &= ~(1 << 0);
+                    state |= (1 << 15);
                 }
 
-                if(_this->_rpm != old_rpm || is_first)
+                if(_this->_rpm != rpm || ((state >> 15) & 0x1))
                 {
                     // write RPMs to display
                     _this->_display->write_rpm(_this->_rpm);
-                    old_rpm = _this->_rpm;
+                    rpm = _this->_rpm;
                 }
 
-                if(old_power != _this->_main_power || old_engine != _this->_is_energized || is_first)
+                if(((state >> 1) & 0x1) != _this->_main_power || ((state >> 2) & 0x1) != _this->_is_energized || ((state >> 15) & 0x1))
                 {
                     // update engine energized state
                     _this->_display->update_engine_state(_this->_is_energized);
@@ -241,33 +275,50 @@ void Controller::display_runner(void* args)
                     // update power state
                     _this->_display->update_power_state(_this->_main_power);
                 
-                    old_power = _this->_main_power;
-                    old_engine = _this->_is_energized;
+                    state = (state & ~(1 << 1)) | (_this->_main_power << 1);
+                    state = (state & ~(1 << 2)) | (_this->_is_energized << 2);
                 }
 
-                // update FOR state
-                _this->_display->update_for_state(_this->_for_f, _this->_for_b);
+                if(((state >> 3) & 0x1) != _this->_for_f || ((state >> 4) & 0x1) != _this->_for_b || ((state >> 15) & 0x1))
+                {
+                    // update FOR state
+                    _this->_display->update_for_state(_this->_for_f, _this->_for_b);
+                    state = (state & ~(1 << 3)) | (_this->_for_f << 3);
+                    state = (state & ~(1 << 4)) | (_this->_for_b << 4);
+                }
 
-                // update light state
-                _this->_display->update_light_state(_this->_light);
+                if(((state >> 5) & 0x1) != _this->_light || ((state >> 15) & 0x1))
+                {
+                    // update light state
+                    _this->_display->update_light_state(_this->_light);
+                    state = (state & ~(1 << 5)) | (_this->_light << 5);
+                }
+          
+                if(((state >> 6) & 0x1) != _this->_backlight || ((state >> 15) & 0x1))
+                {
+                    // update backlight state
+                    _this->_display->update_back_light(_this->_backlight);
+                    state = (state & ~(1 << 6)) | (_this->_light << 6);
+                }
 
-                // update backlight state
-                _this->_display->update_back_light(_this->_backlight);
+                if(((state >> 7) & 0x1) != _this->_lube || ((state >> 15) & 0x1))
+                {
+                    // update lube state
+                    _this->_display->update_lube_state(_this->_lube);
+                    state = (state & ~(1 << 7)) | (_this->_lube << 7);
+                }
 
-                // update lube state
-                _this->_display->update_lube_state(_this->_lube);
-
-                if(had_deferred_action != _this->_has_deferred_action)
+                if(((state >> 8) & 0x1) != _this->_has_deferred_action)
                 {
                     // update warning area
                     _this->_display->update_warning(_this->_has_deferred_action);
-                    had_deferred_action = _this->_has_deferred_action;
+                    state = (state & ~(1 << 8)) | (_this->_lube << 8);
                 }
             }
             xSemaphoreGive(_this->_display_mutex);
         }
-        is_first = false;
-        vTaskDelay(100);
+        state &= ~(1 << 15);
+        vTaskDelay(DISPLAY_REFRESH);
     }
 }
 
@@ -545,8 +596,9 @@ void Controller::rpm_runner(void* args)
  */
 void Controller::calculate_rpm() 
 {
-    unsigned long validTimes[MAX_RPM_PULSES];
-    unsigned long sum = 0;
+    uint64_t now = 0;
+    uint64_t validTimes[MAX_RPM_PULSES];
+    uint64_t sum = 0;
     float avgDelta = 0.0;
     float rawRPM = 0.0;
     int validCount = 0;
@@ -555,10 +607,11 @@ void Controller::calculate_rpm()
         // we need at least two pulses to calculate RPMs. 
 
     // Filter out timestamps older than MAX_RPM_AGE_US
+    timer_get_counter_value(TIMER_GROUP, TIMER_COUNTER, &now);
     for (int i = 0; i < count; i++) 
     {
         int idx = (this->_pulse_index - i - 1 + MAX_RPM_PULSES) % MAX_RPM_PULSES;
-        if (micros() - this->_pulse_times[idx] <= MAX_RPM_AGE_US) validTimes[validCount++] = this->_pulse_times[idx];
+        if (now - this->_pulse_times[idx] <= MAX_RPM_AGE_US) validTimes[validCount++] = this->_pulse_times[idx];
     }
     if (validCount < 2) 
     {
@@ -587,7 +640,7 @@ void Controller::calculate_rpm()
  *
  * @param arg pointer to class instance context (this)
  */
-void IRAM_ATTR Controller::read_hall_sensor(void *arg) 
+bool IRAM_ATTR Controller::read_hall_sensor(void *arg) 
 {
     static byte reg = 0x0;
     static bool last_stable_state = 1;
@@ -599,19 +652,31 @@ void IRAM_ATTR Controller::read_hall_sensor(void *arg)
     Controller* _this = reinterpret_cast<Controller *>(arg);
     portENTER_CRITICAL_ISR(&_hall_mux);
 
-    bool val = digitalRead(I_SPINDLE_PULSE);
+    timer_group_clr_intr_status_in_isr(TIMER_GROUP, TIMER_RPM);
+                                                // clear the timer interrupt to allow for subsequent processing
+    bool val = 0;
+    if(I_SPINDLE_PULSE <32) val = (GPIO.in >> I_SPINDLE_PULSE) & 0x1;
+    else if (I_SPINDLE_PULSE < 40) val = (GPIO.in1.data >> (I_SPINDLE_PULSE - 32)) & 0x1;
+    else val = 0;
+
     reg = ((reg << 1) | (val ? 1 : 0)) & 0x07;  // Shift in current value, keep last 3 bits
     bool stable_state = (reg == 0x07) ? 1 : (reg == 0x00) ? 0 : last_stable_state;
                                                 // Determine stable state from 3-sample debounce
 
     // Detect falling edge: HIGH → LOW
-    if (last_stable_state == 1 && stable_state == 0) {
-        _this->_pulse_times[_this->_pulse_index % MAX_RPM_PULSES] = micros();
+    if (last_stable_state == 1 && stable_state == 0) 
+    {
+        uint64_t currentTime = 0;
+        timer_get_counter_value(TIMER_GROUP, TIMER_COUNTER, &currentTime); 
+            // Read hardware timer, this is a 64bit value, so it rolls over every
+            // 584,942 years
+        _this->_pulse_times[_this->_pulse_index % MAX_RPM_PULSES] = currentTime;
         _this->_pulse_index++;
     }
 
     last_stable_state = stable_state;
     portEXIT_CRITICAL_ISR(&_hall_mux);
+    return false;
 }
 
 /**
@@ -619,9 +684,12 @@ void IRAM_ATTR Controller::read_hall_sensor(void *arg)
  */
 void IRAM_ATTR Controller::handle_energize()
 {
-    static unsigned long last_toggle_energize = 0;
-    unsigned long currentTime = millis();
-    if (currentTime - last_toggle_energize > DEBOUNCE_MS) 
+    static uint64_t last_toggle_energize = 0;
+    uint64_t currentTime = 0;
+    timer_get_counter_value(TIMER_GROUP, TIMER_COUNTER, &currentTime); 
+        // Read hardware timer, this is a 64bit value, so it rolls over every
+        // 584,942 years
+    if (currentTime - last_toggle_energize > DEBOUNCE_US) 
     {
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
         last_toggle_energize = currentTime;
@@ -636,9 +704,12 @@ void IRAM_ATTR Controller::handle_energize()
  */
 void IRAM_ATTR Controller::handle_input()
 {
-    static unsigned long last_input_change = 0;    
-    unsigned long currentTime = millis();
-    if (currentTime - last_input_change > DEBOUNCE_MS) 
+    static uint64_t last_input_change = 0;    
+    uint64_t currentTime = 0;
+    timer_get_counter_value(TIMER_GROUP, TIMER_COUNTER, &currentTime); 
+        // Read hardware timer, this is a 64bit value, so it rolls over every
+        // 584,942 years
+    if (currentTime - last_input_change > DEBOUNCE_US) 
     {
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
         last_input_change = currentTime;
@@ -653,8 +724,11 @@ void IRAM_ATTR Controller::handle_input()
 void IRAM_ATTR Controller::handle_spindle_pulse()
 {    
     static unsigned long hall_debounce_tick = 0;
+    uint64_t now = 0;
     portENTER_CRITICAL_ISR(&_hall_mux);
-    uint64_t now = micros();
+    timer_get_counter_value(TIMER_GROUP, TIMER_COUNTER, &now); 
+        // Read hardware timer, this is a 64bit value, so it rolls over every
+        // 584,942 years
     if(now - hall_debounce_tick > HALL_DEBOUNCE_DELAY_US)
     {
         hall_debounce_tick = now;
