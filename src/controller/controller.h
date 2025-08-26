@@ -25,8 +25,8 @@
 #define O_SPINDLE_OFF 5
 #define O_ENGINE_DISCHARGE 21
 
-#define HALL_DEBOUNCE_DELAY_US 50
-#define HALL_POLLING_INTERVAL_US 50
+#define HALL_DEBOUNCE_DELAY_US 10
+#define HALL_POLLING_INTERVAL_US 10
 #define USE_POLLING_FOR_RPM true
     // this define controls whether we use polling on a timer or interrupts for RPM measurement. 
     // while interrupt drive is preferable, there seem to be a lot of phantom interrupts on low RPMs
@@ -38,12 +38,12 @@
 
 
 #define MAX_RPM_PULSES 12       // History depth for RPM measurement, should be between 8 and 12
-#define MAX_RPM_AGE_US 6000000  // Max age of pulse timestamps to consider in ms, 6-10sec
-#define RPM_SMOOTHING_ALPHA 0.2 // Smoothing factor for RPM curve, should be between 0 and 1, closer to 0 will
+#define MAX_RPM_AGE_US 2000000  // Max age of pulse timestamps to consider in ms, 6-10sec
+#define RPM_SMOOTHING_ALPHA 1.0 // Smoothing factor for RPM curve, should be between 0 and 1, closer to 0 will
                                 // give smoother RPM evolution, closer to 1 will be more responsive but
                                 // also more jittery 
 #define MIN_RPM_DELTA 10        // Minimum change to update display
-#define RPM_CALCULATION_INTERVAL 250
+#define RPM_CALCULATION_INTERVAL 50
 
 
 /**
@@ -70,6 +70,9 @@ class Controller
          * @brief Cleans up resources used by class
          */
         ~Controller();
+
+        volatile unsigned long _pulse_times[MAX_RPM_PULSES];
+        volatile unsigned long _pulse_index = 0;
 
     protected:
 
@@ -150,8 +153,7 @@ class Controller
         volatile State _common;
         volatile State _deenergize;
         
-        volatile unsigned int _pulse_times[MAX_RPM_PULSES];
-        volatile int _pulse_index = 0;
+
         unsigned int _rpm = 0;
 
         SemaphoreHandle_t _display_mutex;

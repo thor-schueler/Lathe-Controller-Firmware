@@ -54,7 +54,7 @@ Controller::Controller()
     pinMode(I_BACKLIGHT, INPUT_PULLDOWN); 
     pinMode(I_LUBE, INPUT_PULLUP);
     pinMode(I_CONTROLBOARD_DETECT, INPUT_PULLDOWN);
-    pinMode(I_SPINDLE_PULSE, INPUT_PULLDOWN);
+    pinMode(I_SPINDLE_PULSE, INPUT_PULLUP);
 
 
     pinMode(O_SPINDLE_DIRECTION_SWITCH_A, OUTPUT);
@@ -536,7 +536,6 @@ void Controller::rpm_runner(void* args)
     { 
         _this->calculate_rpm();
         vTaskDelay(pdMS_TO_TICKS(RPM_CALCULATION_INTERVAL));
-        //_this->_rpm = random(2500);
     }
 }
 
@@ -546,8 +545,8 @@ void Controller::rpm_runner(void* args)
  */
 void Controller::calculate_rpm() 
 {
-    uint32_t validTimes[MAX_RPM_PULSES];
-    uint32_t sum = 0;
+    unsigned long validTimes[MAX_RPM_PULSES];
+    unsigned long sum = 0;
     float avgDelta = 0.0;
     float rawRPM = 0.0;
     int validCount = 0;
@@ -575,11 +574,12 @@ void Controller::calculate_rpm()
     rawRPM = 60000000.0 / avgDelta;
 
     // Jitter suppression
-    if (abs((int)rawRPM - (int)this->_rpm) > MIN_RPM_DELTA)
+    if (RPM_SMOOTHING_ALPHA > 0.0 && RPM_SMOOTHING_ALPHA < 1.0 && abs((int)rawRPM - (int)this->_rpm) > MIN_RPM_DELTA)
     {
         this->_rpm = RPM_SMOOTHING_ALPHA * rawRPM + (1.0 - RPM_SMOOTHING_ALPHA) * this->_rpm;
             // Exponential smoothing
     }
+    else this->_rpm = rawRPM;
 }
 
 /**
@@ -590,7 +590,7 @@ void Controller::calculate_rpm()
 void IRAM_ATTR Controller::read_hall_sensor(void *arg) 
 {
     static byte reg = 0x0;
-    static bool state = 0x1;
+    static bool last_stable_state = 1;
 
     // hall sensor will read logical 1 until the magnet gets close to the sensor, when it
     // switches to logical 0. So it is equivalent to a normally closed switch. So will
@@ -598,18 +598,19 @@ void IRAM_ATTR Controller::read_hall_sensor(void *arg)
 
     Controller* _this = reinterpret_cast<Controller *>(arg);
     portENTER_CRITICAL_ISR(&_hall_mux);
+
     bool val = digitalRead(I_SPINDLE_PULSE);
-    reg = reg << 1;                                 // left shift register
-    reg |= val ?  1 << 0 : 0 << 0;                  // set least signifcant bit based on read value
-    if(reg == 0xff && state == 0x0) state = 0x1;    // if all bits are set, we have a stable 1 state
-    if(reg == 0x0 && state == 0x1)                  // if all bits are unset, we have a stable 0 state
-    {                                               // if at the same time our state is 1, we have a state
-                              // transition. 
-          
+    reg = ((reg << 1) | (val ? 1 : 0)) & 0x07;  // Shift in current value, keep last 3 bits
+    bool stable_state = (reg == 0x07) ? 1 : (reg == 0x00) ? 0 : last_stable_state;
+                                                // Determine stable state from 3-sample debounce
+
+    // Detect falling edge: HIGH → LOW
+    if (last_stable_state == 1 && stable_state == 0) {
         _this->_pulse_times[_this->_pulse_index % MAX_RPM_PULSES] = micros();
         _this->_pulse_index++;
-        state = 0x0;
     }
+
+    last_stable_state = stable_state;
     portEXIT_CRITICAL_ISR(&_hall_mux);
 }
 
@@ -653,11 +654,11 @@ void IRAM_ATTR Controller::handle_spindle_pulse()
 {    
     static unsigned long hall_debounce_tick = 0;
     portENTER_CRITICAL_ISR(&_hall_mux);
-    uint64_t now = esp_timer_get_time();
+    uint64_t now = micros();
     if(now - hall_debounce_tick > HALL_DEBOUNCE_DELAY_US)
     {
         hall_debounce_tick = now;
-        this->_pulse_times[this->_pulse_index % MAX_RPM_PULSES] = micros();
+        this->_pulse_times[this->_pulse_index % MAX_RPM_PULSES] = now;
         this->_pulse_index++;
     }
     portEXIT_CRITICAL_ISR(&_hall_mux);
