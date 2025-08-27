@@ -627,7 +627,7 @@ void Controller::calculate_rpm()
     }
 
     // Calculate average delta
-    for (int i = 1; i < validCount; i++) sum += validTimes[i - 1] - validTimes[i];
+    for (int i = 1; i < validCount; i++) sum += validTimes[i] - validTimes[i-1];
 
     avgDelta = sum / float(validCount - 1);
     rawRPM = 60000000.0 / avgDelta;
@@ -683,9 +683,9 @@ bool IRAM_ATTR Controller::read_hall_sensor(void *arg)
             // Shift left to discard oldest
             memmove((void*)&(_this->_pulse_times[0]), (void*)&(_this->_pulse_times[1]), sizeof(uint64_t) * (MAX_RPM_PULSES - 1));
             _this->_pulse_times[MAX_RPM_PULSES - 1] = currentTime;
+            _this->_counter++;
         }
     }
-
     last_stable_state = stable_state;
     portEXIT_CRITICAL_ISR(&_hall_mux);
     return false;

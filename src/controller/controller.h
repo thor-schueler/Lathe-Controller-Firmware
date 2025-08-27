@@ -83,6 +83,11 @@ class Controller
          */
         ~Controller();
 
+        volatile unsigned int _pulse_count = 0;
+        volatile unsigned int _rpm = 0;
+
+        volatile unsigned int _counter = 0;
+
     protected:
 
         /**
@@ -158,18 +163,14 @@ class Controller
         volatile bool _has_deferred_action = false;
 
         volatile uint64_t _pulse_times[MAX_RPM_PULSES];
-        volatile unsigned int _pulse_count = 0;
+
 
         volatile State _direction_a;
         volatile State _direction_b;
         volatile State _common;
         volatile State _deenergize;
-        
-
-        volatile unsigned int _rpm = 0;
-
-        SemaphoreHandle_t _display_mutex;
-        //esp_timer_handle_t _hall_timer_handle = NULL;        
+    
+        SemaphoreHandle_t _display_mutex;       
 };
 
 #endif
