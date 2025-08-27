@@ -683,8 +683,8 @@ bool IRAM_ATTR Controller::read_hall_sensor(void *arg)
             // Shift left to discard oldest
             memmove((void*)&(_this->_pulse_times[0]), (void*)&(_this->_pulse_times[1]), sizeof(uint64_t) * (MAX_RPM_PULSES - 1));
             _this->_pulse_times[MAX_RPM_PULSES - 1] = currentTime;
-            _this->_counter++;
         }
+        _this->_counter++;
     }
     last_stable_state = stable_state;
     portEXIT_CRITICAL_ISR(&_hall_mux);

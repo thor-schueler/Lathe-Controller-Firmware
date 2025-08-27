@@ -70,5 +70,4 @@ void setup()
 void loop()
 {
   vTaskDelay(1000);
-  Logger.Info_f(F("%u, %u, %u"),  controller->_pulse_count, controller->_counter, controller->_rpm);
 }
