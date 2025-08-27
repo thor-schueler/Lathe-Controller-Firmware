@@ -254,10 +254,9 @@ void Controller::display_runner(void* args)
             {
                 if(((state >> 0) & 0x1) || ((state >> 15) & 0x1))
                 {
-                    //restore display background after emergency
+                    //restore display background after emergency and reset state
                     _this->_display->update_background();
-                    state &= ~(1 << 0);
-                    state |= (1 << 15);
+                    state = 0b1000000000000000;
                 }
 
                 if(_this->_rpm != rpm || ((state >> 15) & 0x1))
@@ -589,7 +588,6 @@ void Controller::rpm_runner(void* args)
         vTaskDelay(pdMS_TO_TICKS(RPM_CALCULATION_INTERVAL));
     }
 }
-
 
 /**
  * @brief Calculates the rpm based on the collected pulses
