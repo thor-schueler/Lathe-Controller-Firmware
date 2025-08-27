@@ -298,7 +298,7 @@ void Controller::display_runner(void* args)
                 {
                     // update backlight state
                     _this->_display->update_back_light(_this->_backlight);
-                    state = (state & ~(1 << 6)) | (_this->_light << 6);
+                    state = (state & ~(1 << 6)) | (_this->_backlight << 6);
                 }
 
                 if(((state >> 7) & 0x1) != _this->_lube || ((state >> 15) & 0x1))
@@ -632,7 +632,7 @@ void Controller::calculate_rpm()
         this->_rpm = RPM_SMOOTHING_ALPHA * rawRPM + (1.0 - RPM_SMOOTHING_ALPHA) * this->_rpm;
             // Exponential smoothing
     }
-    else this->_rpm = rawRPM;
+    else if (abs((int)rawRPM - (int)this->_rpm) > MIN_RPM_DELTA) this->_rpm = rawRPM;
 }
 
 /**

@@ -38,7 +38,7 @@ extern "C" {
 
 #define HALL_DEBOUNCE_DELAY_US 10
 #define HALL_POLLING_INTERVAL_US 25
-#define USE_POLLING_FOR_RPM false
+#define USE_POLLING_FOR_RPM true
     // this define controls whether we use polling on a timer or interrupts for RPM measurement. 
     // while interrupt drive is preferable, there seem to be a lot of phantom interrupts on low RPMs
     // probably because the slow takeup edge on the hall. We might be able to reduce the capacitor 
