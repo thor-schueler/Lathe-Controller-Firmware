@@ -54,7 +54,7 @@ extern "C" {
                                 // give smoother RPM evolution, closer to 1 will be more responsive but
                                 // also more jittery 
 #define MIN_RPM_DELTA 10        // Minimum change to update display
-#define RPM_CALCULATION_INTERVAL 100
+#define RPM_CALCULATION_INTERVAL 10
 #define DISPLAY_REFRESH 100
 
 
@@ -82,9 +82,6 @@ class Controller
          * @brief Cleans up resources used by class
          */
         ~Controller();
-
-        volatile uint64_t _pulse_times[MAX_RPM_PULSES];
-        volatile uint64_t _pulse_index = 0;
 
     protected:
 
@@ -160,13 +157,16 @@ class Controller
         volatile bool _lube = false;
         volatile bool _has_deferred_action = false;
 
+        volatile uint64_t _pulse_times[MAX_RPM_PULSES];
+        volatile unsigned int _pulse_count = 0;
+
         volatile State _direction_a;
         volatile State _direction_b;
         volatile State _common;
         volatile State _deenergize;
         
 
-        unsigned int _rpm = 0;
+        volatile unsigned int _rpm = 0;
 
         SemaphoreHandle_t _display_mutex;
         //esp_timer_handle_t _hall_timer_handle = NULL;        

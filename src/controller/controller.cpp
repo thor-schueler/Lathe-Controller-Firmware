@@ -312,7 +312,7 @@ void Controller::display_runner(void* args)
                 {
                     // update warning area
                     _this->_display->update_warning(_this->_has_deferred_action);
-                    state = (state & ~(1 << 8)) | (_this->_lube << 8);
+                    state = (state & ~(1 << 8)) | (_this->_has_deferred_action << 8);
                 }
             }
             xSemaphoreGive(_this->_display_mutex);
@@ -602,16 +602,22 @@ void Controller::calculate_rpm()
     float avgDelta = 0.0;
     float rawRPM = 0.0;
     int validCount = 0;
-    int count = (this->_pulse_index < MAX_RPM_PULSES) ? this->_pulse_index : MAX_RPM_PULSES;
-    if (count < 2) return;
+    int count = (this->_pulse_count < MAX_RPM_PULSES) ? this->_pulse_count : MAX_RPM_PULSES;
+    if (count < 2)
+    { 
         // we need at least two pulses to calculate RPMs. 
+        this->_rpm = 0;
+        return;
+    }    
 
     // Filter out timestamps older than MAX_RPM_AGE_US
     timer_get_counter_value(TIMER_GROUP, TIMER_COUNTER, &now);
     for (int i = 0; i < count; i++) 
     {
-        int idx = (this->_pulse_index - i - 1 + MAX_RPM_PULSES) % MAX_RPM_PULSES;
-        if (now - this->_pulse_times[idx] <= MAX_RPM_AGE_US) validTimes[validCount++] = this->_pulse_times[idx];
+        if (now - this->_pulse_times[i] <= MAX_RPM_AGE_US) 
+        {
+            validTimes[validCount++] = this->_pulse_times[i];
+        }
     }
     if (validCount < 2) 
     {
@@ -670,8 +676,14 @@ bool IRAM_ATTR Controller::read_hall_sensor(void *arg)
         timer_get_counter_value(TIMER_GROUP, TIMER_COUNTER, &currentTime); 
             // Read hardware timer, this is a 64bit value, so it rolls over every
             // 584,942 years
-        _this->_pulse_times[_this->_pulse_index % MAX_RPM_PULSES] = currentTime;
-        _this->_pulse_index++;
+
+        if (_this->_pulse_count < MAX_RPM_PULSES) _this->_pulse_times[_this->_pulse_count++] = currentTime;
+        else 
+        {
+            // Shift left to discard oldest
+            memmove((void*)&(_this->_pulse_times[0]), (void*)&(_this->_pulse_times[1]), sizeof(uint64_t) * (MAX_RPM_PULSES - 1));
+            _this->_pulse_times[MAX_RPM_PULSES - 1] = currentTime;
+        }
     }
 
     last_stable_state = stable_state;
@@ -732,8 +744,14 @@ void IRAM_ATTR Controller::handle_spindle_pulse()
     if(now - hall_debounce_tick > HALL_DEBOUNCE_DELAY_US)
     {
         hall_debounce_tick = now;
-        this->_pulse_times[this->_pulse_index % MAX_RPM_PULSES] = now;
-        this->_pulse_index++;
+
+        if (this->_pulse_count < MAX_RPM_PULSES) this->_pulse_times[this->_pulse_count++] = now;
+        else 
+        {
+            // Shift left to discard oldest
+            memmove((void*)&this->_pulse_times[0], (void*)&this->_pulse_times[1], sizeof(uint64_t) * (MAX_RPM_PULSES - 1));
+            this->_pulse_times[MAX_RPM_PULSES - 1] = now;
+        }
     }
     portEXIT_CRITICAL_ISR(&_hall_mux);
 }
