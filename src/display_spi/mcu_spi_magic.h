@@ -26,7 +26,7 @@
 #define CS    15
 #define SID   13
 #define SCK   14
-#define SPI_BUS_FREQUENCY 5000000
+#define SPI_BUS_FREQUENCY 8000000
 
 #define TFT_WIDTH 240
 #define TFT_HEIGHT 320
