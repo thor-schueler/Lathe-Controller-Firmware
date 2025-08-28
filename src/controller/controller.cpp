@@ -240,6 +240,7 @@ void Controller::display_runner(void* args)
         //         |      +------------ has deferred action
         //         +------------------- is first
 
+    int count = 0;
     for (;;) 
     { 
         if (xSemaphoreTake(_this->_display_mutex, portMAX_DELAY) == pdTRUE) 
@@ -262,8 +263,13 @@ void Controller::display_runner(void* args)
                 if(_this->_rpm != rpm || ((state >> 15) & 0x1))
                 {
                     // write RPMs to display
-                    _this->_display->write_rpm(_this->_rpm);
                     rpm = _this->_rpm;
+                        // it is important to catpure the rpm here as the write RPM takes some time, 
+                        // during which the rpm might change again. This might lead to a situation where
+                        // the display is never updated as the rpm changes again before we write it, especially if
+                        // no new pulses come in (rpm == 0)
+                    _this->_display->write_rpm(_this->_rpm);
+                    
                 }
 
                 if(((state >> 1) & 0x1) != _this->_main_power || ((state >> 2) & 0x1) != _this->_is_energized || ((state >> 15) & 0x1))

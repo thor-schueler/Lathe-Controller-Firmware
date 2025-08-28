@@ -83,11 +83,6 @@ class Controller
          */
         ~Controller();
 
-        volatile unsigned int _pulse_count = 0;
-        volatile unsigned int _rpm = 0;
-
-        volatile unsigned int _counter = 0;
-
     protected:
 
         /**
@@ -163,7 +158,9 @@ class Controller
         volatile bool _has_deferred_action = false;
 
         volatile uint64_t _pulse_times[MAX_RPM_PULSES];
-
+        volatile unsigned int _pulse_count = 0;
+        volatile unsigned int _rpm = 0;
+        volatile unsigned int _counter = 0;
 
         volatile State _direction_a;
         volatile State _direction_b;
