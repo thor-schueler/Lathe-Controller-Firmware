@@ -8,7 +8,7 @@
 #include "../logging/SerialLogger.h"
 
 const unsigned int rpm_x = 218;
-const unsigned int rpm_y = 50;
+const unsigned int rpm_y = 43;
 
 /**
  * @brief Generates a new instance of the Controller_Display class. 
@@ -146,30 +146,58 @@ void Controller_Display::write_rpm(unsigned int rpm)
 {
   if (rpm > 9999) rpm = 9999; // clamp to max
     
+  // Clear area on first invoation.
+  static bool is_first = true;
+  if(is_first)
+  {
+    uint16_t n = (rpm_x - 70) * digit_h * 2;
+    uint8_t* blank = (uint8_t*)malloc(n);
+    if (blank) {
+        memset(blank, 0x00, n);
+        draw_image(blank, n, 70, rpm_y, rpm_x-70, digit_h);
+        free(blank);
+    }
+    is_first = false;
+  }
+
   // Extract digits into a buffer (max 4 digits)
-  uint8_t digit[4];
+  static int8_t current_digits[4] = { -1, -1, -1, -1 }; 
+  int8_t digit[4] = { -1, -1, -1, -1};
   uint8_t count = 0;
-  do {
+  do 
+  {
       digit[count++] = rpm % 10;
       rpm /= 10;
   } while (rpm > 0 && count < 4);
 
-  uint16_t n = (rpm_x - 70) * digit_h * 2;
-  uint8_t* blank = (uint8_t*)malloc(n);
-  if (blank) {
-      memset(blank, 0x00, n);
-      draw_image(blank, n, 70, rpm_y, rpm_x-70, digit_h);
-      free(blank);
-  }
-
-  // Render digits from least to most significant (right to left)
+  // Render only digits that have changed...
   int16_t x = rpm_x;
-  for (int i = 0; i < count; i++) {
-    uint8_t dig = digit[i];
-    uint8_t w = digit_width[dig];
-    x -= w;
-    draw_image(digits[dig], digit_size[dig], x, rpm_y, w, digit_h);
-  }
-  
+  for(int i=0; i<4; i++)
+  {
+    if(digit[i] == current_digits[i])
+    {
+        // digit has not changed, so nothing....
+    }
+    else
+    {
+      if(digit[i] == -1)
+      {
+        // digit is now blank, so clear it
+        uint8_t w = digit_width[0];
+        x -= w;
+        fill_rect(x, rpm_y, w, digit_h, 0x0);
+
+      }
+      else
+      {
+        // digit has changed, so redraw it
+        uint8_t dig = digit[i];
+        uint8_t w = digit_width[dig];
+        x -= w;
+        draw_image(digits[dig], digit_size[dig], x, rpm_y, w, digit_h);
+      }
+      current_digits[i] = digit[i];
+    }
+  }  
 }
 
