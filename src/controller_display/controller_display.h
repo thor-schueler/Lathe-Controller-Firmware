@@ -93,11 +93,24 @@ extern const unsigned int lube_w;
 extern const unsigned int lube_h;
 extern const size_t lube_on_size;
 extern const size_t lube_off_size;
+#pragma endregion
 
+#pragma region externals for digits
 extern const unsigned char* digits[10] PROGMEM;
 extern const size_t digit_size[10] PROGMEM;
 extern const unsigned int digit_width[10] PROGMEM;
 extern const unsigned int digit_h;
+#pragma endregion
+
+#pragma region externals for scales
+extern const unsigned int scales_h;
+extern const unsigned int scales_y;
+extern const unsigned char* scales_o[6] PROGMEM;
+extern const unsigned char* scales_g[6] PROGMEM;
+extern const unsigned int scales_width[6] PROGMEM;
+extern const unsigned int scales_x[6] PROGMEM;
+extern const size_t scales_size[6] PROGMEM;
+extern const unsigned int speeds[6] PROGMEM;
 #pragma endregion
 
 /**
@@ -181,6 +194,12 @@ class Controller_Display:public DISPLAY_SPI
 		 * @param rpm - The value for the rpm to write
 		 */
 		void write_rpm(unsigned int rpm);
+
+		/**
+		 * @brief Updates the scale display according to the given speed
+		 * @param rpm - The speed in rotations per minute
+		 */
+		void update_scale(unsigned int rpm);
 
 	private: 
 
