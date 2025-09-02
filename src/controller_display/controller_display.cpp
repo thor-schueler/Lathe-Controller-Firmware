@@ -177,9 +177,11 @@ void Controller_Display::write_rpm(unsigned int rpm)
     if(digit[i] == current_digits[i])
     {
         // digit has not changed, so nothing....
+        continue;
     }
     else
     {
+      current_digits[i] = digit[i];
       if(digit[i] == -1)
       {
         // digit is now blank, so clear it
@@ -195,7 +197,6 @@ void Controller_Display::write_rpm(unsigned int rpm)
         x -= w;
         draw_image(digits[dig], digit_size[dig], x, rpm_y, w, digit_h);
       }
-      current_digits[i] = digit[i];
     }
   }  
 }
@@ -221,7 +222,7 @@ void Controller_Display::update_scale(unsigned int rpm)
       {
         for(int i=0; i<6; i++)
         {
-          if(current_rpm >= speeds[i]) scale[i] = 0xff;
+          if(current_rpm >= speeds[i]) scale[i] = 0xffff;
             // speed exceeds the cutoff for this bar, so we set the entire bar
           else if (current_rpm > (i==0 ? 0 : speeds[i-1]) && current_rpm < speeds[i])
           {
@@ -242,6 +243,8 @@ void Controller_Display::update_scale(unsigned int rpm)
       {
         if(scale[i] == current_scale[i]) continue;
           // bar is already in desired state, do nothing
+        
+        current_scale[i] = scale [i];
         if(scale[i] == 0x0) draw_image(scales_o[i], scales_size[i], scales_x[i], scales_y, scales_width[i], scales_h);
           // bar is set to off, so we draw the yellow off bar.
         else if(scale[i] == 0xffff) draw_image(scales_g[i], scales_size[i], scales_x[i], scales_y, scales_width[i], scales_h);
@@ -271,7 +274,6 @@ void Controller_Display::update_scale(unsigned int rpm)
             draw_image(scales_o[i], scales_size[i], scales_x[i], scales_y, scales_width[i], scales_h);
           }
         }
-        current_scale[i] = scale [i];
       }
     }
 }

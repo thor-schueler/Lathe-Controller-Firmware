@@ -49,7 +49,7 @@ extern "C" {
 
 
 #define MAX_RPM_PULSES 12       // History depth for RPM measurement, should be between 8 and 12
-#define MAX_RPM_AGE_US 2000000  // Max age of pulse timestamps to consider in ms, 6-10sec
+#define MAX_RPM_AGE_US 3000000  // Max age of pulse timestamps to consider in ms, 6-10sec
 #define RPM_SMOOTHING_ALPHA 1.0 // Smoothing factor for RPM curve, should be between 0 and 1, closer to 0 will
                                 // give smoother RPM evolution, closer to 1 will be more responsive but
                                 // also more jittery 
