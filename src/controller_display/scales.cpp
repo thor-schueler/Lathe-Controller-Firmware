@@ -22,7 +22,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "controller_display.h"
 
 
-const unsigned int sclaes_h = 15;
+const unsigned int scales_h = 15;
 const unsigned int scales_y = 124;
 const unsigned int scales_0_w = 23;
 const unsigned int scales_0_x = 75;
