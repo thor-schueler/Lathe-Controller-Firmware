@@ -207,261 +207,71 @@ void Controller_Display::write_rpm(unsigned int rpm)
 void Controller_Display::update_scale(unsigned int rpm)
 {
     static unsigned int current_rpm = -1;
-    static unsigned int current_scale[6] = {0,0,0,0,0,0};
+    static uint16_t current_scale[6] = {0,0,0,0,0,0};
+    uint16_t scale[6] = {0,0,0,0,0,0};
     if(current_rpm != rpm)
     {
       // need to update sales... 
       current_rpm = rpm;
-      if(current_rpm <= 0) 
+
+      // calculate what bars are set, unset or factional
+      if(current_rpm <= 0) memset(scale, 0x0, sizeof(scale)); 
+          // mark all scales to be unset
+      else if (current_rpm > 0 && current_rpm < speeds[5])
       {
-        for(int i=0; i<6; i++) if(current_scale[i] != 0) 
+        for(int i=0; i<6; i++)
         {
-          current_scale[i] = 0;
-          draw_image(scales_o[i], scales_size[i], scales_x[i], scales_y, scales_width[i], scales_h);
+          if(current_rpm >= speeds[i]) scale[i] = 0xff;
+            // speed exceeds the cutoff for this bar, so we set the entire bar
+          else if (current_rpm > (i==0 ? 0 : speeds[i-1]) && current_rpm < speeds[i])
+          {
+            // speed is inside this bar, so calculate a fractional on and off bar. We calculate the 
+            // number of pixels to which we draw the on bar
+            float p = (float)(current_rpm - (i==0 ? 0 : speeds[i-1])) / (float)(speeds[i]-(i==0 ? 0 : speeds[i-1]));
+            scale[i] =  static_cast<uint_fast16_t>(p * scales_width[i]);
+          }
+          else scale[i] = 0x00;
+            // speed has not touched this bar, so we unset the entire bar. 
         }
       }
-      else if (current_rpm < speeds[0])
-      {
-        float p = (float)current_rpm / (float)speeds[0];
-        int xp =  static_cast<int>(ceil(p * scales_width[0]));
-        current_scale[0] = p;
+      else memset(scale, 0xff, sizeof(scale)); 
+          // mark all scales to be set
 
-        // generate a partial scale images based on the percentage
-        unsigned char* output_g = static_cast<unsigned char*>(malloc(scales_h*xp*2));
-        unsigned char* output_y = static_cast<unsigned char*>(malloc(scales_h*(scales_width[0] - xp)*2));
-        if(output_g && output_y)
-        {
-          for(int row=0; row<scales_h; row++)
-          {
-            memcpy(&output_g[row*xp*2], &scales_g[0][row*scales_width[0]*2], xp*2);
-            memcpy(&output_y[row*(scales_width[0]-xp)*2], &scales_o[0][row*scales_width[0]*2 + xp*2], (scales_width[0]-xp)*2);
-          }
-          draw_image(output_g, scales_h*xp*2, scales_x[0], scales_y, xp, scales_h);
-          draw_image(output_y, scales_h*(scales_width[0]-xp)*2, scales_x[0]+xp, scales_y, scales_width[0]-xp, scales_h);
-          free(output_g);
-          free(output_y);
-        }
+      // draw the bars
+      for(int i=0; i<6; i++)
+      {
+        if(scale[i] == current_scale[i]) continue;
+          // bar is already in desired state, do nothing
+        if(scale[i] == 0x0) draw_image(scales_o[i], scales_size[i], scales_x[i], scales_y, scales_width[i], scales_h);
+          // bar is set to off, so we draw the yellow off bar.
+        else if(scale[i] == 0xffff) draw_image(scales_g[i], scales_size[i], scales_x[i], scales_y, scales_width[i], scales_h);
+          // bar is set to on, so we draw the green on bar. 
         else
         {
-          // memory allocation failed... just draw the full scale
-          draw_image(scales_o[0], scales_size[0], scales_x[0], scales_y, scales_width[0], scales_h);
-        }
-        // draw the other bars as necessary
-        for(int i=1; i<6; i++) if(current_scale[i] != 0) 
-        {
-          current_scale[i] = 0;
-          draw_image(scales_o[i], scales_size[i], scales_x[i], scales_y, scales_width[i], scales_h);
-        }
-      }
-      else if (current_rpm < speeds[1])
-      {
-        // draw full green bars as necessary
-        for(int i=0; i<1; i++) if(current_scale[i] != 0) 
-        {
-          current_scale[i] = 0;
-          draw_image(scales_o[i], scales_size[i], scales_x[i], scales_y, scales_width[i], scales_h);
-        }
-
-        float p = (float)(current_rpm - speeds[0]) / (float)(speeds[1]-speeds[0]);
-        int xp =  static_cast<int>(ceil(p * scales_width[1]));
-        current_scale[1] = p;
-
-        // generate a partial scale images based on the percentage
-        unsigned char* output_g = static_cast<unsigned char*>(malloc(scales_h*xp*2));
-        unsigned char* output_y = static_cast<unsigned char*>(malloc(scales_h*(scales_width[1] - xp)*2));
-        if(output_g && output_y)
-        {
-          for(int row=0; row<scales_h; row++)
+          // this is a frational bar. So we need to generate a partial scale images based on the pixel value present. 
+          // we need to go with gractionals because of the digits and gradients on the bar. It is easier and faster
+          // to manipulate it this was as opposed to calcuate something. 
+          unsigned char* output_g = static_cast<unsigned char*>(malloc(scales_h * scale[i] * 2));
+          unsigned char* output_y = static_cast<unsigned char*>(malloc(scales_h * (scales_width[i] - scale[i]) * 2));
+          if(output_g && output_y)
           {
-            memcpy(&output_g[row*xp*2], &scales_g[1][row*scales_width[1]*2], xp*2);
-            memcpy(&output_y[row*(scales_width[1]-xp)*2], &scales_o[1][row*scales_width[1]*2 + xp*2], (scales_width[1]-xp)*2);
+            for(int row=0; row<scales_h; row++)
+            {
+              memcpy(&output_g[row * scale[i] * 2], &scales_g[i][row * scales_width[i] * 2], scale[i] * 2);
+              memcpy(&output_y[row * (scales_width[i]-scale[i]) * 2], &scales_o[i][row * scales_width[i]*2 + scale[i]*2], (scales_width[i]-scale[i])*2);
+            }
+            draw_image(output_g, scales_h * scale[i] * 2, scales_x[i], scales_y, scale[i], scales_h);
+            draw_image(output_y, scales_h * (scales_width[i]-scale[i]) * 2, scales_x[i]+scale[i], scales_y, scales_width[i]-scale[i], scales_h);
+            free(output_g);
+            free(output_y);
           }
-          draw_image(output_g, scales_h*xp*2, scales_x[1], scales_y, xp, scales_h);
-          draw_image(output_y, scales_h*(scales_width[1]-xp)*2, scales_x[1]+xp, scales_y, scales_width[1]-xp, scales_h);
-          free(output_g);
-          free(output_y);
-        }
-        else
-        {
-          // memory allocation failed... just draw the full scale
-          draw_image(scales_o[1], scales_size[1], scales_x[1], scales_y, scales_width[1], scales_h);
-        }
-
-        // draw the other bars as necessary
-        for(int i=2; i<6; i++) if(current_scale[i] != 0) 
-        {
-          current_scale[i] = 0;
-          draw_image(scales_o[i], scales_size[i], scales_x[i], scales_y, scales_width[i], scales_h);
-        }
-      }
-      else if (current_rpm < speeds[2])
-      {
-        // draw full green bars as necessary
-        for(int i=0; i<2; i++) if(current_scale[i] != 0) 
-        {
-          current_scale[i] = 0;
-          draw_image(scales_o[i], scales_size[i], scales_x[i], scales_y, scales_width[i], scales_h);
-        }
-
-        float p = (float)(current_rpm - speeds[1]) / (float)(speeds[2]-speeds[1]);
-        int xp =  static_cast<int>(ceil(p * scales_width[2]));
-        current_scale[2] = p;
-
-        // generate a partial scale images based on the percentage
-        unsigned char* output_g = static_cast<unsigned char*>(malloc(scales_h*xp*2));
-        unsigned char* output_y = static_cast<unsigned char*>(malloc(scales_h*(scales_width[2] - xp)*2));
-        if(output_g && output_y)
-        {
-          for(int row=0; row<scales_h; row++)
+          else
           {
-            memcpy(&output_g[row*xp*2], &scales_g[2][row*scales_width[2]*2], xp*2);
-            memcpy(&output_y[row*(scales_width[2]-xp)*2], &scales_o[2][row*scales_width[2]*2 + xp*2], (scales_width[2]-xp)*2);
+            // memory allocation failed... just draw the full scale
+            draw_image(scales_o[i], scales_size[i], scales_x[i], scales_y, scales_width[i], scales_h);
           }
-          draw_image(output_g, scales_h*xp*2, scales_x[2], scales_y, xp, scales_h);
-          draw_image(output_y, scales_h*(scales_width[2]-xp)*2, scales_x[2]+xp, scales_y, scales_width[2]-xp, scales_h);
-          free(output_g);
-          free(output_y);
         }
-        else
-        {
-          // memory allocation failed... just draw the full scale
-          draw_image(scales_o[2], scales_size[2], scales_x[2], scales_y, scales_width[2], scales_h);
-        }
-
-        // draw the other bars as necessary
-        for(int i=3; i<6; i++) if(current_scale[i] != 0) 
-        {
-          current_scale[i] = 0;
-          draw_image(scales_o[i], scales_size[i], scales_x[i], scales_y, scales_width[i], scales_h);
-        }
-      }
-      else if (current_rpm < speeds[3])
-      {
-        // draw full green bars as necessary
-        for(int i=0; i<3; i++) if(current_scale[i] != 0) 
-        {
-          current_scale[i] = 0;
-          draw_image(scales_o[i], scales_size[i], scales_x[i], scales_y, scales_width[i], scales_h);
-        }
-
-        float p = (float)(current_rpm - speeds[2]) / (float)(speeds[3]-speeds[2]);
-        int xp =  static_cast<int>(ceil(p * scales_width[3]));
-        current_scale[3] = p;
-
-        // generate a partial scale images based on the percentage
-        unsigned char* output_g = static_cast<unsigned char*>(malloc(scales_h*xp*2));
-        unsigned char* output_y = static_cast<unsigned char*>(malloc(scales_h*(scales_width[3] - xp)*2));
-        if(output_g && output_y)
-        {
-          for(int row=0; row<scales_h; row++)
-          {
-            memcpy(&output_g[row*xp*2], &scales_g[3][row*scales_width[3]*2], xp*2);
-            memcpy(&output_y[row*(scales_width[3]-xp)*2], &scales_o[3][row*scales_width[3]*2 + xp*2], (scales_width[3]-xp)*2);
-          }
-          draw_image(output_g, scales_h*xp*2, scales_x[3], scales_y, xp, scales_h);
-          draw_image(output_y, scales_h*(scales_width[3]-xp)*2, scales_x[3]+xp, scales_y, scales_width[3]-xp, scales_h);
-          free(output_g);
-          free(output_y);
-        }
-        else
-        {
-          // memory allocation failed... just draw the full scale
-          draw_image(scales_o[3], scales_size[3], scales_x[3], scales_y, scales_width[3], scales_h);
-        }
-
-        // draw the other bars as necessary
-        for(int i=4; i<6; i++) if(current_scale[i] != 0) 
-        {
-          current_scale[i] = 0;
-          draw_image(scales_o[i], scales_size[i], scales_x[i], scales_y, scales_width[i], scales_h);
-        }        
-      }
-      else if (current_rpm < speeds[4])
-      {
-        // draw full green bars as necessary
-        for(int i=0; i<4; i++) if(current_scale[i] != 0) 
-        {
-          current_scale[i] = 0;
-          draw_image(scales_o[i], scales_size[i], scales_x[i], scales_y, scales_width[i], scales_h);
-        }
-
-        float p = (float)(current_rpm - speeds[3]) / (float)(speeds[4]-speeds[3]);
-        int xp =  static_cast<int>(ceil(p * scales_width[4]));
-        current_scale[4] = p;
-
-        // generate a partial scale images based on the percentage
-        unsigned char* output_g = static_cast<unsigned char*>(malloc(scales_h*xp*2));
-        unsigned char* output_y = static_cast<unsigned char*>(malloc(scales_h*(scales_width[4] - xp)*2));
-        if(output_g && output_y)
-        {
-          for(int row=0; row<scales_h; row++)
-          {
-            memcpy(&output_g[row*xp*2], &scales_g[4][row*scales_width[4]*2], xp*2);
-            memcpy(&output_y[row*(scales_width[4]-xp)*2], &scales_o[4][row*scales_width[4]*2 + xp*2], (scales_width[4]-xp)*2);
-          }
-          draw_image(output_g, scales_h*xp*2, scales_x[4], scales_y, xp, scales_h);
-          draw_image(output_y, scales_h*(scales_width[4]-xp)*2, scales_x[4]+xp, scales_y, scales_width[4]-xp, scales_h);
-          free(output_g);
-          free(output_y);
-        }
-        else
-        {
-          // memory allocation failed... just draw the full scale
-          draw_image(scales_o[4], scales_size[4], scales_x[4], scales_y, scales_width[4], scales_h);
-        }
-
-        // draw the other bars as necessary
-        for(int i=5; i<6; i++) if(current_scale[i] != 0) 
-        {
-          current_scale[i] = 0;
-          draw_image(scales_o[i], scales_size[i], scales_x[i], scales_y, scales_width[i], scales_h);
-        } 
-      }
-      else if (current_rpm < speeds[5])
-      {
-        // draw full green bars as necessary
-        for(int i=0; i<5; i++) if(current_scale[i] != 0) 
-        {
-          current_scale[i] = 0;
-          draw_image(scales_o[i], scales_size[i], scales_x[i], scales_y, scales_width[i], scales_h);
-        }
-
-        float p = (float)(current_rpm - speeds[4]) / (float)(speeds[5]-speeds[4]);
-        int xp =  static_cast<int>(ceil(p * scales_width[5]));
-        current_scale[5] = p;
-
-        // generate a partial scale images based on the percentage
-        unsigned char* output_g = static_cast<unsigned char*>(malloc(scales_h*xp*2));
-        unsigned char* output_y = static_cast<unsigned char*>(malloc(scales_h*(scales_width[5] - xp)*2));
-        if(output_g && output_y)
-        {
-          for(int row=0; row<scales_h; row++)
-          {
-            memcpy(&output_g[row*xp*2], &scales_g[5][row*scales_width[5]*2], xp*2);
-            memcpy(&output_y[row*(scales_width[5]-xp)*2], &scales_o[5][row*scales_width[5]*2 + xp*2], (scales_width[5]-xp)*2);
-          }
-          draw_image(output_g, scales_h*xp*2, scales_x[5], scales_y, xp, scales_h);
-          draw_image(output_y, scales_h*(scales_width[5]-xp)*2, scales_x[5]+xp, scales_y, scales_width[5]-xp, scales_h);
-          free(output_g);
-          free(output_y);
-        }
-        else
-        {
-          // memory allocation failed... just draw the full scale
-          draw_image(scales_o[5], scales_size[5], scales_x[5], scales_y, scales_width[5], scales_h);
-        }
-      }
-      else if (current_rpm > speeds[5])
-      {
-        for(int i=0; i<6; i++) if(current_scale[i] != 100) 
-        {
-          current_scale[i] = 100;
-          draw_image(scales_g[i], scales_size[i], scales_x[i], scales_y, scales_width[i], scales_h);
-        }
-      }
-      else
-      {
-        // should never get here. take no action
+        current_scale[i] = scale [i];
       }
     }
 }
