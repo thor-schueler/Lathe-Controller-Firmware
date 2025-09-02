@@ -7,8 +7,8 @@
 #include "controller_display.h"
 #include "../logging/SerialLogger.h"
 
-const unsigned int rpm_x = 218;
-const unsigned int rpm_y = 43;
+const unsigned int rpm_x = 220;
+const unsigned int rpm_y = 48;
 
 /**
  * @brief Generates a new instance of the Controller_Display class. 
@@ -186,7 +186,6 @@ void Controller_Display::write_rpm(unsigned int rpm)
         uint8_t w = digit_width[0];
         x -= w;
         fill_rect(x, rpm_y, w, digit_h, 0x0);
-
       }
       else
       {
