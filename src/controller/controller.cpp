@@ -269,7 +269,7 @@ void Controller::display_runner(void* args)
                         // the display is never updated as the rpm changes again before we write it, especially if
                         // no new pulses come in (rpm == 0)
                     _this->_display->write_rpm(_this->_rpm);
-                    
+                    _this->_display->update_scale(_this->_rpm);
                 }
 
                 if(((state >> 1) & 0x1) != _this->_main_power || ((state >> 2) & 0x1) != _this->_is_energized || ((state >> 15) & 0x1))

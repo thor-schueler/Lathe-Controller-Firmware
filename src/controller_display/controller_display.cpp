@@ -7,8 +7,8 @@
 #include "controller_display.h"
 #include "../logging/SerialLogger.h"
 
-const unsigned int rpm_x = 218;
-const unsigned int rpm_y = 50;
+const unsigned int rpm_x = 220;
+const unsigned int rpm_y = 48;
 
 /**
  * @brief Generates a new instance of the Controller_Display class. 
@@ -146,30 +146,134 @@ void Controller_Display::write_rpm(unsigned int rpm)
 {
   if (rpm > 9999) rpm = 9999; // clamp to max
     
+  // Clear area on first invoation.
+  static bool is_first = true;
+  if(is_first)
+  {
+    uint16_t n = (rpm_x - 70) * digit_h * 2;
+    uint8_t* blank = (uint8_t*)malloc(n);
+    if (blank) {
+        memset(blank, 0x00, n);
+        draw_image(blank, n, 70, rpm_y, rpm_x-70, digit_h);
+        free(blank);
+    }
+    is_first = false;
+  }
+
   // Extract digits into a buffer (max 4 digits)
-  uint8_t digit[4];
+  static int8_t current_digits[4] = { -1, -1, -1, -1 }; 
+  int8_t digit[4] = { -1, -1, -1, -1};
   uint8_t count = 0;
-  do {
+  do 
+  {
       digit[count++] = rpm % 10;
       rpm /= 10;
   } while (rpm > 0 && count < 4);
 
-  uint16_t n = (rpm_x - 70) * digit_h * 2;
-  uint8_t* blank = (uint8_t*)malloc(n);
-  if (blank) {
-      memset(blank, 0x00, n);
-      draw_image(blank, n, 70, rpm_y, rpm_x-70, digit_h);
-      free(blank);
-  }
-
-  // Render digits from least to most significant (right to left)
+  // Render only digits that have changed...
   int16_t x = rpm_x;
-  for (int i = 0; i < count; i++) {
-    uint8_t dig = digit[i];
-    uint8_t w = digit_width[dig];
-    x -= w;
-    draw_image(digits[dig], digit_size[dig], x, rpm_y, w, digit_h);
-  }
-  
+  for(int i=0; i<4; i++)
+  {
+    if(digit[i] == current_digits[i])
+    {
+        // digit has not changed, so nothing....
+        continue;
+    }
+    else
+    {
+      current_digits[i] = digit[i];
+      if(digit[i] == -1)
+      {
+        // digit is now blank, so clear it
+        uint8_t w = digit_width[0];
+        x -= w;
+        fill_rect(x, rpm_y, w, digit_h, 0x0);
+      }
+      else
+      {
+        // digit has changed, so redraw it
+        uint8_t dig = digit[i];
+        uint8_t w = digit_width[dig];
+        x -= w;
+        draw_image(digits[dig], digit_size[dig], x, rpm_y, w, digit_h);
+      }
+    }
+  }  
 }
 
+/**
+ * @brief Updates the scale display according to the given speed
+ * @param rpm - The speed in rotations per minute
+ */
+void Controller_Display::update_scale(unsigned int rpm)
+{
+    static unsigned int current_rpm = -1;
+    static uint16_t current_scale[6] = {0,0,0,0,0,0};
+    uint16_t scale[6] = {0,0,0,0,0,0};
+    if(current_rpm != rpm)
+    {
+      // need to update sales... 
+      current_rpm = rpm;
+
+      // calculate what bars are set, unset or factional
+      if(current_rpm <= 0) memset(scale, 0x0, sizeof(scale)); 
+          // mark all scales to be unset
+      else if (current_rpm > 0 && current_rpm < speeds[5])
+      {
+        for(int i=0; i<6; i++)
+        {
+          if(current_rpm >= speeds[i]) scale[i] = 0xffff;
+            // speed exceeds the cutoff for this bar, so we set the entire bar
+          else if (current_rpm > (i==0 ? 0 : speeds[i-1]) && current_rpm < speeds[i])
+          {
+            // speed is inside this bar, so calculate a fractional on and off bar. We calculate the 
+            // number of pixels to which we draw the on bar
+            float p = (float)(current_rpm - (i==0 ? 0 : speeds[i-1])) / (float)(speeds[i]-(i==0 ? 0 : speeds[i-1]));
+            scale[i] =  static_cast<uint_fast16_t>(p * scales_width[i]);
+          }
+          else scale[i] = 0x00;
+            // speed has not touched this bar, so we unset the entire bar. 
+        }
+      }
+      else memset(scale, 0xff, sizeof(scale)); 
+          // mark all scales to be set
+
+      // draw the bars
+      for(int i=0; i<6; i++)
+      {
+        if(scale[i] == current_scale[i]) continue;
+          // bar is already in desired state, do nothing
+        
+        current_scale[i] = scale [i];
+        if(scale[i] == 0x0) draw_image(scales_o[i], scales_size[i], scales_x[i], scales_y, scales_width[i], scales_h);
+          // bar is set to off, so we draw the yellow off bar.
+        else if(scale[i] == 0xffff) draw_image(scales_g[i], scales_size[i], scales_x[i], scales_y, scales_width[i], scales_h);
+          // bar is set to on, so we draw the green on bar. 
+        else
+        {
+          // this is a frational bar. So we need to generate a partial scale images based on the pixel value present. 
+          // we need to go with gractionals because of the digits and gradients on the bar. It is easier and faster
+          // to manipulate it this was as opposed to calcuate something. 
+          unsigned char* output_g = static_cast<unsigned char*>(malloc(scales_h * scale[i] * 2));
+          unsigned char* output_y = static_cast<unsigned char*>(malloc(scales_h * (scales_width[i] - scale[i]) * 2));
+          if(output_g && output_y)
+          {
+            for(int row=0; row<scales_h; row++)
+            {
+              memcpy(&output_g[row * scale[i] * 2], &scales_g[i][row * scales_width[i] * 2], scale[i] * 2);
+              memcpy(&output_y[row * (scales_width[i]-scale[i]) * 2], &scales_o[i][row * scales_width[i]*2 + scale[i]*2], (scales_width[i]-scale[i])*2);
+            }
+            draw_image(output_g, scales_h * scale[i] * 2, scales_x[i], scales_y, scale[i], scales_h);
+            draw_image(output_y, scales_h * (scales_width[i]-scale[i]) * 2, scales_x[i]+scale[i], scales_y, scales_width[i]-scale[i], scales_h);
+            free(output_g);
+            free(output_y);
+          }
+          else
+          {
+            // memory allocation failed... just draw the full scale
+            draw_image(scales_o[i], scales_size[i], scales_x[i], scales_y, scales_width[i], scales_h);
+          }
+        }
+      }
+    }
+}
