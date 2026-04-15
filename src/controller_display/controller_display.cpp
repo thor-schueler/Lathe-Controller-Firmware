@@ -146,7 +146,7 @@ void Controller_Display::write_rpm(unsigned int rpm)
 {
   if (rpm > 9999) rpm = 9999; // clamp to max
     
-  // Clear area on first invoation.
+  // Clear area on first invocation.
   static bool is_first = true;
   if(is_first)
   {
@@ -176,8 +176,9 @@ void Controller_Display::write_rpm(unsigned int rpm)
   {
     if(digit[i] == current_digits[i])
     {
-        // digit has not changed, so nothing....
-        continue;
+        // digit has not changed, so nothing except adjust x coordinate
+        uint8_t w = digit_width[digit[i] == -1 ? 0 : digit[i]];
+        x -= w;
     }
     else
     {

@@ -1,4 +1,4 @@
-// Copyright (c) Avanade. All rights reserved.
+// Copyright (c) Thor Schueler. All rights reserved.
 // SPDX-License-Identifier: MIT
 
 /*
