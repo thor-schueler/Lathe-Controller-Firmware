@@ -449,7 +449,7 @@ void Controller::input_runner(void* args)
                         reg = reg << 1;                                 // left shift register
                         reg |= val ?  1 << 0 : 0 << 0;                  // set least signifcant bit based on read value
                         stabilization_counter++;
-                        vTaskDelay(pdMS_TO_TICKS(20));              
+                        vTaskDelay(pdMS_TO_TICKS(1));              
                     }
                     while(reg != 0xff && stabilization_counter < 40);
                         // delay any action until the button press on Energize is released
